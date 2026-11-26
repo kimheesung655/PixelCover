@@ -10,7 +10,7 @@ function installCanvas(output: Blob | null) {
     getContext: vi.fn(),
     toBlob: vi.fn<(callback: BlobCallback, format?: string, quality?: number) => void>(),
   };
-  const context = { canvas, drawImage: vi.fn() };
+  const context = { canvas, drawImage: vi.fn(), fillRect: vi.fn(), fillStyle: "", globalCompositeOperation: "" };
   canvas.getContext.mockReturnValue(context);
   canvas.toBlob.mockImplementation((callback) => callback(output));
   const createElement = vi.fn().mockReturnValue(canvas);
@@ -32,6 +32,7 @@ test("전용 원본 크기 캔버스에서 배경을 채우지 않고 PNG로 인
   await expect(exportImage(image, [], "image/png")).resolves.toBe(png);
   expect(createElement).toHaveBeenCalledWith("canvas");
   expect(context.drawImage).toHaveBeenCalledExactlyOnceWith(image, 0, 0);
+  expect(context.fillRect).not.toHaveBeenCalled();
   expect(canvas.width).toBe(0);
 });
 
@@ -43,3 +44,25 @@ test.each([null, new Blob(["wrong type"], { type: "image/jpeg" })])(
     expect(canvas.width).toBe(0);
   },
 );
+
+test.each([[undefined, 0.92], [0, 0], [0.7, 0.7], [1, 1]])(
+  "JPEG를 흰색 배경으로 합성하고 품질 %s를 전달한다",
+  async (quality, expectedQuality) => {
+    const jpeg = new Blob(["encoded"], { type: "image/jpeg" });
+    const { canvas, context } = installCanvas(jpeg);
+    await expect(exportImage(image, [], "image/jpeg", quality)).resolves.toBe(jpeg);
+
+    expect(context.globalCompositeOperation).toBe("destination-over");
+    expect(context.fillStyle).toBe("#fff");
+    expect(context.fillRect).toHaveBeenCalledExactlyOnceWith(0, 0, 3, 2);
+    expect(context.drawImage).toHaveBeenCalledBefore(context.fillRect);
+    expect(context.fillRect).toHaveBeenCalledBefore(canvas.toBlob);
+    expect(canvas.toBlob).toHaveBeenCalledExactlyOnceWith(expect.any(Function), "image/jpeg", expectedQuality);
+  },
+);
+
+test.each([-0.01, 1.01, NaN, Infinity])("유효하지 않은 JPEG 품질 %s를 거부한다", async (quality) => {
+  const { createElement } = installCanvas(null);
+  await expect(exportImage(image, [], "image/jpeg", quality)).rejects.toHaveProperty("code", "EXPORT_FAILED");
+  expect(createElement).not.toHaveBeenCalled();
+});
