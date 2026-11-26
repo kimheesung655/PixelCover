@@ -60,3 +60,41 @@ test("지정한 영역만 삭제하고 나머지 순서를 유지한다", () => 
   expect(editor.getRegions().map(({ id }) => id)).toEqual(["one", "three"]);
   expect(() => editor.remove("two")).toThrow(expect.objectContaining({ code: "INVALID_REGION" }));
 });
+
+test("추가, 수정, 삭제를 순서대로 되돌리고 다시 실행한다", () => {
+  const editor = new RegionEditor(12, 12);
+  expect(editor.undo()).toBe(false);
+  editor.add(initial);
+  editor.update("one", { intensity: 60 });
+  editor.remove("one");
+
+  expect(editor.undo()).toBe(true);
+  expect(editor.getRegions()[0].intensity).toBe(60);
+  expect(editor.undo()).toBe(true);
+  expect(editor.getRegions()[0].intensity).toBe(30);
+  expect(editor.undo()).toBe(true);
+  expect(editor.getRegions()).toEqual([]);
+  expect(editor.undo()).toBe(false);
+  expect(editor.redo()).toBe(true);
+  expect(editor.redo()).toBe(true);
+  expect(editor.redo()).toBe(true);
+  expect(editor.getRegions()).toEqual([]);
+  expect(editor.redo()).toBe(false);
+});
+
+test("실패하거나 값이 같은 변경은 Redo를 보존하고 새 편집은 폐기한다", () => {
+  const editor = new RegionEditor(12, 12);
+  editor.add(initial);
+  editor.update("one", { intensity: 60 });
+  editor.undo();
+
+  editor.update("one", { intensity: 30 });
+  expect(() => editor.remove("unknown")).toThrow();
+  expect(editor.redo()).toBe(true);
+  expect(editor.getRegions()[0].intensity).toBe(60);
+
+  editor.undo();
+  editor.update("one", { intensity: 90 });
+  expect(editor.redo()).toBe(false);
+  expect(editor.getRegions()[0].intensity).toBe(90);
+});

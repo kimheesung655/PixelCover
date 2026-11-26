@@ -3,6 +3,8 @@ import { normalizeRegion, type EditRegion } from "./edit-region";
 
 export class RegionEditor {
   private regions: EditRegion[] = [];
+  private past: EditRegion[][] = [];
+  private future: EditRegion[][] = [];
 
   constructor(private readonly imageWidth: number, private readonly imageHeight: number) {}
 
@@ -15,7 +17,7 @@ export class RegionEditor {
     if (this.regions.some(({ id }) => id === normalized.id)) {
       throw new ImageEditError("INVALID_REGION", "같은 ID의 편집 영역이 이미 있습니다.");
     }
-    this.regions = [...this.regions, normalized];
+    this.record([...this.regions, normalized]);
   }
 
   update(id: string, changes: Partial<Omit<EditRegion, "id">>): void {
@@ -24,12 +26,34 @@ export class RegionEditor {
     const next = normalizeRegion({ ...current, ...changes, id }, this.imageWidth, this.imageHeight);
     if (sameRegion(current, next)) return;
 
-    this.regions = this.regions.map((region, position) => position === index ? next : region);
+    this.record(this.regions.map((region, position) => position === index ? next : region));
   }
 
   remove(id: string): void {
     const index = this.findIndex(id);
-    this.regions = this.regions.filter((_region, position) => position !== index);
+    this.record(this.regions.filter((_region, position) => position !== index));
+  }
+
+  undo(): boolean {
+    const previous = this.past.pop();
+    if (!previous) return false;
+    this.future.push(this.regions);
+    this.regions = previous;
+    return true;
+  }
+
+  redo(): boolean {
+    const next = this.future.pop();
+    if (!next) return false;
+    this.past.push(this.regions);
+    this.regions = next;
+    return true;
+  }
+
+  private record(next: EditRegion[]): void {
+    this.past.push(this.regions);
+    this.regions = next;
+    this.future = [];
   }
 
   private findIndex(id: string): number {
