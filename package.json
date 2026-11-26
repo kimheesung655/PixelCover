@@ -3,6 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "check:setup": "node --test tests/setup.test.mjs"
+    "check:setup": "node --test tests/setup.test.mjs",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.65.1",
+    "@types/node": "24.19.4",
+    "typescript": "6.0.3",
+    "vite": "8.3.8",
+    "vitest": "5.1.2"
   }
 }

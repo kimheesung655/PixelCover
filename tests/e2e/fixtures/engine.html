@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>PixelCover 엔진 통합 테스트</title>
+  </head>
+  <body>
+    <label>이미지 선택 <input type="file" accept="image/png,image/jpeg,image/webp" disabled></label>
+    <p role="status">이미지를 선택하면 오른쪽 절반을 가립니다.</p>
+    <canvas width="0" height="0" aria-label="편집 미리보기"></canvas>
+    <a hidden>PNG 다운로드</a>
+    <script type="module" src="./engine.ts"></script>
+  </body>
+</html>
