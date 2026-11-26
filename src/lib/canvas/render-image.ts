@@ -30,16 +30,18 @@ export function renderImage(
     target.canvas.width = width;
     target.canvas.height = height;
     target.drawImage(image, 0, 0);
-    if (normalized.length === 0) return;
-
-    const pixels = target.getImageData(0, 0, width, height);
-    for (const region of redactions) applyRedaction(pixels, region);
+    for (const region of redactions) applyRedaction(target, region);
     for (const region of normalized) {
-      if (region.type === "mosaic") applyMosaic(pixels, region, region.intensity);
-      else if (region.type === "blur") applyBlur(pixels, region, region.intensity);
+      if (region.type === "redact") continue;
+
+      const { x, y, width, height, intensity } = region;
+      const pixels = target.getImageData(x, y, width, height);
+      const localRegion = { x: 0, y: 0, width, height };
+      if (region.type === "mosaic") applyMosaic(pixels, localRegion, intensity);
+      else applyBlur(pixels, localRegion, intensity);
+      target.putImageData(pixels, x, y);
     }
-    for (const region of redactions) applyRedaction(pixels, region);
-    target.putImageData(pixels, 0, 0);
+    for (const region of redactions) applyRedaction(target, region);
   } catch (cause) {
     // A failed effect must never leave the unedited source visible.
     target.canvas.width = 0;

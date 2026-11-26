@@ -5,7 +5,9 @@ export function applyBlur(image: PixelBuffer, region: PixelRegion, intensity: nu
   const radius = 1 + Math.floor((intensity - 1) * 23 / 99);
   const { x, y, width, height } = region;
   const columns = new Int32Array(width * 4);
-  const output = new Uint8ClampedArray(width * height * 4);
+  const stride = width * 4;
+  const retainedRows = Math.min(height, radius + 1);
+  const output = new Uint8ClampedArray(stride * retainedRows);
   const window = new Int32Array(4);
 
   for (let row = 0; row < Math.min(height, radius + 1); row++) {
@@ -14,7 +16,12 @@ export function applyBlur(image: PixelBuffer, region: PixelRegion, intensity: nu
 
   for (let row = 0; row < height; row++) {
     if (row > 0 && row + radius < height) updateColumns(row + radius, 1);
-    if (row > radius) updateColumns(row - radius - 1, -1);
+    if (row > radius) {
+      const expiredRow = row - radius - 1;
+      updateColumns(expiredRow, -1);
+      // The source row has left the vertical window and may now be overwritten.
+      flushRow(expiredRow);
+    }
 
     const rows = Math.min(height - 1, row + radius) - Math.max(0, row - radius) + 1;
     window.fill(0);
@@ -27,21 +34,21 @@ export function applyBlur(image: PixelBuffer, region: PixelRegion, intensity: nu
       if (col > radius) updateWindow(col - radius - 1, -1);
 
       const cols = Math.min(width - 1, col + radius) - Math.max(0, col - radius) + 1;
-      const index = (row * width + col) * 4;
+      const index = (row % retainedRows) * stride + col * 4;
       const alpha = window[3];
-      if (alpha) {
-        output[index] = window[0] / alpha;
-        output[index + 1] = window[1] / alpha;
-        output[index + 2] = window[2] / alpha;
-      }
+      output[index] = alpha ? window[0] / alpha : 0;
+      output[index + 1] = alpha ? window[1] / alpha : 0;
+      output[index + 2] = alpha ? window[2] / alpha : 0;
       output[index + 3] = alpha / (rows * cols);
     }
   }
 
-  const stride = width * 4;
-  for (let row = 0; row < height; row++) {
+  for (let row = height - retainedRows; row < height; row++) flushRow(row);
+
+  function flushRow(row: number): void {
+    const start = (row % retainedRows) * stride;
     const destination = ((y + row) * image.width + x) * 4;
-    image.data.set(output.subarray(row * stride, (row + 1) * stride), destination);
+    image.data.set(output.subarray(start, start + stride), destination);
   }
 
   function updateColumns(row: number, direction: 1 | -1): void {

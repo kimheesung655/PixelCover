@@ -33,6 +33,14 @@ test("여러 영역을 흐려도 영역 바깥의 행과 픽셀을 보존한다"
   expect(redValues(image.data)).toEqual([90, 10, 73, 110, 90, 30, 30, 93, 91, 1, 2, 3, 4, 5, 6, 94]);
 });
 
+test("긴 영역에서 버퍼를 재사용해도 아직 필요한 원본 행은 유지한다", () => {
+  const input = [0, 240, 30, 180, 60, 90, 120, 150];
+  const image = grayscale(1, input);
+  applyBlur(image, { x: 0, y: 0, width: 1, height: input.length }, 1);
+
+  expect(redValues(image.data)).toEqual([120, 90, 150, 90, 110, 90, 120, 135]);
+});
+
 test("이웃의 색을 알파로 가중하고 완전 투명 영역을 보존한다", () => {
   const image = { width: 3, height: 1, data: Uint8ClampedArray.of(255, 0, 0, 0, 0, 0, 255, 255, 255, 0, 0, 0) };
   applyBlur(image, { x: 0, y: 0, width: 3, height: 1 }, 1);

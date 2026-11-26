@@ -11,8 +11,16 @@ function createCanvas(red: number[]) {
   const canvas = {
     canvas: { width: 0, height: 0 },
     drawImage: vi.fn(),
-    getImageData: vi.fn().mockReturnValue(pixels),
-    putImageData: vi.fn(),
+    fillStyle: "",
+    fillRect: vi.fn((x: number, _y: number, width: number) => {
+      for (let i = x; i < x + width; i++) pixels.data.set([0, 0, 0, 255], i * 4);
+    }),
+    getImageData: vi.fn((x: number, _y: number, width: number, height: number) => ({
+      width, height, data: pixels.data.slice(x * 4, (x + width) * 4),
+    })),
+    putImageData: vi.fn((region: ImageData, x: number) => {
+      pixels.data.set(region.data, x * 4);
+    }),
   };
   const image = { width: pixels.width, height: pixels.height } as ImageBitmap;
   return { pixels, image, canvas, context: canvas as unknown as CanvasRenderingContext2D };
@@ -27,7 +35,8 @@ test("일반 효과는 배열의 순서를 따르고 캔버스는 원본 크기�
 
   expect(canvas.canvas).toEqual({ width: 4, height: 1 });
   expect(canvas.drawImage).toHaveBeenCalledWith(image, 0, 0);
-  expect(canvas.putImageData).toHaveBeenCalledExactlyOnceWith(pixels, 0, 0);
+  expect(canvas.getImageData.mock.calls).toEqual([[0, 0, 4, 1], [1, 0, 2, 1]]);
+  expect(canvas.putImageData).toHaveBeenCalledTimes(2);
   expect(Array.from(pixels.data.filter((_value, index) => index % 4 === 0))).toEqual([20, 115, 115, 210]);
 });
 
@@ -42,6 +51,16 @@ test.each(["blur", "mosaic"] as const)("가려진 원본 색은 겹친 %s 결과
 
   expect(first.pixels.data).toEqual(second.pixels.data);
   expect(Array.from(first.pixels.data.slice(4, 8))).toEqual([0, 0, 0, 255]);
+});
+
+test("가림만 적용할 때는 원본 픽셀 버퍼를 읽지 않는다", () => {
+  const { image, canvas, context, pixels } = createCanvas([12, 34, 56, 78]);
+  const cover: EditRegion = { ...mosaic, id: "cover", x: 1, width: 1, type: "redact" };
+
+  renderImage(image, [cover], context);
+
+  expect(canvas.getImageData).not.toHaveBeenCalled();
+  expect(Array.from(pixels.data.slice(4, 8))).toEqual([0, 0, 0, 255]);
 });
 
 test("중복 ID를 그리기 전에 거부한다", () => {
