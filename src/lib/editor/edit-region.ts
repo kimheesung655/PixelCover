@@ -25,6 +25,9 @@ export function normalizeRegion(region: EditRegion, imageWidth: number, imageHei
   ) {
     throw new ImageEditError("INVALID_REGION", "편집 영역의 ID, 좌표 또는 치수가 올바르지 않습니다.");
   }
+  if (type !== "mosaic" && type !== "blur" && type !== "redact") {
+    throw new ImageEditError("INVALID_REGION", "지원하지 않는 편집 효과입니다.");
+  }
   if (type !== "redact" && (!Number.isInteger(intensity) || intensity < 1 || intensity > 100)) {
     throw new ImageEditError("INVALID_REGION", "모자이크와 블러 강도는 1~100 사이의 정수여야 합니다.");
   }
