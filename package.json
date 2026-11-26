@@ -1,0 +1,8 @@
+{
+  "name": "pixelcover",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "check:setup": "node --test tests/setup.test.mjs"
+  }
+}
