@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from "vitest";
-import { decodeImage } from "../../src/lib/image/decode-image";
+import { decodeImage, validateImage } from "../../src/lib/image/decode-image";
 
 function jpegHeaderOnly(type = "image/jpeg"): File {
   const bytes = Uint8Array.of(0xff, 0xd8, 0xff, 0xc0, 0, 11, 8, 0, 2, 0, 3, 1, 1, 0x11, 0);
@@ -23,7 +23,7 @@ test("헤더를 통과한 손상 파일의 브라우저 디코딩 거부를 변�
   const file = jpegHeaderOnly();
 
   await expect(decodeImage(file)).rejects.toMatchObject({ code: "DECODE_FAILED", cause });
-  expect(decoder).toHaveBeenCalledExactlyOnceWith(file);
+  expect(decoder).toHaveBeenCalledExactlyOnceWith(file, { imageOrientation: "from-image" });
 });
 
 test("MIME 힌트 없이 들어온 파일을 감지한 MIME으로 디코딩한다", async () => {
@@ -36,4 +36,21 @@ test("MIME 힌트 없이 들어온 파일을 감지한 MIME으로 디코딩한�
   const source: Blob = decoder.mock.calls[0][0];
   expect(source.type).toBe("image/jpeg");
   expect(await source.arrayBuffer()).toEqual(await file.arrayBuffer());
+});
+
+test("검증 결과는 헤더 대신 방향이 보정된 원본 치수를 사용한다", async () => {
+  const rotatedBitmap = { width: 2, height: 3, close: vi.fn() };
+  const decoder = vi.fn().mockResolvedValue(rotatedBitmap);
+  vi.stubGlobal("createImageBitmap", decoder);
+  const file = jpegHeaderOnly();
+
+  await expect(validateImage(file)).resolves.toEqual({
+    width: 2,
+    height: 3,
+    mimeType: "image/jpeg",
+    fileName: file.name,
+    fileSize: file.size,
+  });
+  expect(decoder).toHaveBeenCalledExactlyOnceWith(file, { imageOrientation: "from-image" });
+  expect(rotatedBitmap.close).toHaveBeenCalledOnce();
 });
