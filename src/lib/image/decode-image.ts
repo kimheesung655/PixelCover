@@ -1,6 +1,6 @@
 import { ImageEditError } from "../editor/image-edit-error";
 import type { InputMime } from "./file-format";
-import { inspectImageFile } from "./image-preflight";
+import { enforceImageDimensions, inspectImageFile } from "./image-preflight";
 
 export interface ImageInfo {
   width: number;
@@ -25,18 +25,34 @@ export async function validateImage(file: File): Promise<ImageInfo> {
   }
 }
 
+/** The caller owns the decoded bitmap and must close it when finished. */
 export async function decodeImage(file: File): Promise<ImageBitmap> {
   const { bitmap } = await decodeImageFile(file);
   return bitmap;
 }
 
 async function decodeImageFile(file: File): Promise<{ bitmap: ImageBitmap; mimeType: InputMime }> {
-  const { mimeType } = await inspectImageFile(file);
-  const source = file.type === mimeType ? file : file.slice(0, file.size, mimeType);
+  const { mimeType, bitmap } = await createFileBitmap(file);
   try {
+    if (bitmap.width === 0 || bitmap.height === 0) {
+      throw new ImageEditError("DECODE_FAILED", "디코딩 결과의 치수가 올바르지 않습니다.");
+    }
+    enforceImageDimensions(bitmap);
+    return { bitmap, mimeType };
+  } catch (error) {
+    bitmap.close();
+    throw error;
+  }
+}
+
+async function createFileBitmap(file: File): Promise<{ bitmap: ImageBitmap; mimeType: InputMime }> {
+  try {
+    const { mimeType } = await inspectImageFile(file);
+    const source = file.type === mimeType ? file : file.slice(0, file.size, mimeType);
     const bitmap = await createImageBitmap(source, { imageOrientation: "from-image" });
     return { bitmap, mimeType };
   } catch (cause) {
-    throw new ImageEditError("DECODE_FAILED", "이미지 본문을 디코딩할 수 없습니다.", { cause });
+    if (cause instanceof ImageEditError) throw cause;
+    throw new ImageEditError("DECODE_FAILED", "이미지 파일을 읽거나 디코딩할 수 없습니다.", { cause });
   }
 }
