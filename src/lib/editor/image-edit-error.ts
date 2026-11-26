@@ -4,7 +4,8 @@ export type ImageEditErrorCode =
   | "IMAGE_TOO_LARGE"
   | "DECODE_FAILED"
   | "INVALID_REGION"
-  | "RENDER_FAILED";
+  | "RENDER_FAILED"
+  | "EXPORT_FAILED";
 
 export class ImageEditError extends Error {
   constructor(readonly code: ImageEditErrorCode, message: string, options?: ErrorOptions) {
