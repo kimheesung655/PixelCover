@@ -16,7 +16,8 @@
     "src/**/*.ts",
     "src/**/*.tsx",
     "tests/**/*.ts",
-    "vitest.config.mts"
+    "vitest.config.mts",
+    "playwright.config.mts"
   ],
   "exclude": [
     "node_modules",
