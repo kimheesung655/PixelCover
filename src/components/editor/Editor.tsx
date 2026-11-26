@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import {
   ArrowDownToLine,
+  Brush,
   ChevronDown,
   CircleHelp,
   CloudUpload,
@@ -15,12 +16,13 @@ import {
   Redo2,
   RotateCcw,
   Sparkles,
+  SquareDashed,
   Undo2,
   WandSparkles,
 } from "lucide-react";
-import { renderImage, type EffectType } from "../../lib/editor";
+import type { EffectType } from "../../lib/editor";
 import { toImageCoordinates } from "../../lib/editor/image-coordinates";
-import { useImageEditor, type Area } from "../../hooks/useImageEditor";
+import { useImageEditor, type Area, type BrushStroke } from "../../hooks/useImageEditor";
 import { toUserMessage } from "./messages";
 
 const TOOLS: { label: string; key: EffectType; icon: typeof Layers3 }[] = [
@@ -29,10 +31,18 @@ const TOOLS: { label: string; key: EffectType; icon: typeof Layers3 }[] = [
   { label: "가리기", key: "redact", icon: Eraser },
 ];
 
+type SelectMode = "brush" | "rect";
+
 const ACCEPT = "image/jpeg,image/png,image/webp";
 // 이보다 작은 드래그(원본 픽셀 기준)는 클릭으로 보고 선택하지 않는다.
 const MIN_SELECTION = 4;
 const COPY_LABEL = "이미지 복사";
+// 브러시 크기는 화면에 보이는 지름(CSS px)으로 고르고, 칠할 때 원본 픽셀 크기로 바꾼다.
+const BRUSH_MIN = 8;
+const BRUSH_MAX = 120;
+const BRUSH_DEFAULT = 36;
+
+type ActiveStroke = { stroke: BrushStroke; minStep: number; path: string };
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -40,6 +50,10 @@ function clamp(value: number, min: number, max: number): number {
 
 function toolLabel(tool: EffectType): string {
   return TOOLS.find(({ key }) => key === tool)?.label ?? tool;
+}
+
+function formatCoord(value: number): string {
+  return String(Math.round(value * 10) / 10);
 }
 
 function getSelectionStyle(selection: Area, imageWidth: number, imageHeight: number): CSSProperties {
@@ -52,10 +66,25 @@ function getSelectionStyle(selection: Area, imageWidth: number, imageHeight: num
 }
 
 export function Editor() {
-  const { image, regions, canUndo, canRedo, loadFile, addRegion, undo, redo, reset, exportPng } = useImageEditor();
+  const {
+    image,
+    regions,
+    canUndo,
+    canRedo,
+    loadFile,
+    addRegion,
+    addBrushStroke,
+    undo,
+    redo,
+    reset,
+    renderPreview,
+    exportPng,
+  } = useImageEditor();
 
   const [selectedTool, setSelectedTool] = useState<EffectType>("mosaic");
+  const [selectMode, setSelectMode] = useState<SelectMode>("brush");
   const [intensity, setIntensity] = useState(40);
+  const [brushSize, setBrushSize] = useState(BRUSH_DEFAULT);
   const [selection, setSelection] = useState<Area | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -66,8 +95,15 @@ export function Editor() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
+  const strokeRef = useRef<ActiveStroke | null>(null);
+  const strokePathRef = useRef<SVGPathElement>(null);
+  const cursorRef = useRef<HTMLDivElement>(null);
 
   const showStatus = useCallback((text: string, error = false) => setStatus({ text, error }), []);
+
+  const clearStrokePreview = useCallback(() => {
+    strokePathRef.current?.setAttribute("d", "");
+  }, []);
 
   const handleFile = useCallback(
     async (file: File) => {
@@ -76,26 +112,40 @@ export function Editor() {
         const loaded = await loadFile(file);
         if (!loaded) return;
         setSelection(null);
-        showStatus("영역을 드래그해 편집을 시작하세요");
+        showStatus(selectMode === "brush" ? "가릴 부분을 마우스로 칠해 보세요" : "영역을 드래그해 편집을 시작하세요");
       } catch (error) {
         showStatus(toUserMessage(error), true);
       }
     },
-    [loadFile, showStatus],
+    [loadFile, showStatus, selectMode],
   );
+
+  const handleUndo = useCallback(() => {
+    if (!undo()) return;
+    setSelection(null);
+    showStatus("이전 작업으로 되돌렸어요.");
+  }, [undo, showStatus]);
+
+  const handleRedo = useCallback(() => {
+    if (!redo()) return;
+    setSelection(null);
+    showStatus("작업을 다시 적용했어요.");
+  }, [redo, showStatus]);
 
   // 엔진 렌더러로 원본 크기 캔버스를 다시 그린다. 화면 표시 크기는 CSS가 줄인다.
   useEffect(() => {
     const context = canvasRef.current?.getContext("2d");
     if (!image || !context) return;
     try {
-      renderImage(image.bitmap, regions, context);
+      renderPreview(context);
     } catch (error) {
       showStatus(toUserMessage(error), true);
     }
-  }, [image, regions, showStatus]);
+    // 방금 칠한 획의 미리보기 선은 실제 효과가 그려진 뒤에 지운다.
+    clearStrokePreview();
+  }, [image, renderPreview, showStatus, clearStrokePreview]);
 
-  // Ctrl+V 붙여넣기, 페이지 어디에 놓아도 열리는 드래그 앤 드롭, Ctrl/⌘+O 파일 열기
+  // Ctrl+V 붙여넣기, 페이지 어디에 놓아도 열리는 드래그 앤 드롭, Ctrl/⌘+O 파일 열기, Ctrl/⌘+Z 실행 취소
   useEffect(() => {
     let dragDepth = 0;
     const hasFiles = (event: DragEvent) => Array.from(event.dataTransfer?.types ?? []).includes("Files");
@@ -133,9 +183,17 @@ export function Editor() {
       if (file) void handleFile(file);
     }
     function handleKeyDown(event: KeyboardEvent) {
-      if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === "o") {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+      const key = event.key.toLowerCase();
+      if (key === "o") {
         event.preventDefault();
         fileInputRef.current?.click();
+      } else if (key === "z" || key === "y") {
+        const target = event.target as HTMLElement | null;
+        if (target?.isContentEditable || target?.tagName === "TEXTAREA" || target?.tagName === "INPUT" && (target as HTMLInputElement).type === "text") return;
+        event.preventDefault();
+        if (key === "y" || event.shiftKey) handleRedo();
+        else handleUndo();
       }
     }
 
@@ -153,7 +211,7 @@ export function Editor() {
       window.removeEventListener("drop", handleDrop);
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [handleFile]);
+  }, [handleFile, handleUndo, handleRedo]);
 
   useEffect(() => {
     // 서버에서 만든 HTML과 어긋나지 않도록 마운트 후에 운영체제별 단축키 표시를 바꾼다.
@@ -161,23 +219,106 @@ export function Editor() {
     if (/Mac|iPhone|iPad/i.test(platform)) setShortcutLabel("⌘ O");
   }, []);
 
-  function getImagePoint(event: ReactPointerEvent<HTMLCanvasElement>): { x: number; y: number } | null {
+  function toImagePoint(canvas: HTMLCanvasElement, clientX: number, clientY: number): { x: number; y: number } | null {
     if (!image) return null;
     try {
-      const point = toImageCoordinates(
-        { x: event.clientX, y: event.clientY },
-        event.currentTarget.getBoundingClientRect(),
-        image.width,
-        image.height,
-      );
+      const point = toImageCoordinates({ x: clientX, y: clientY }, canvas.getBoundingClientRect(), image.width, image.height);
       return { x: clamp(point.x, 0, image.width), y: clamp(point.y, 0, image.height) };
     } catch {
       return null;
     }
   }
 
-  function handlePointerDown(event: ReactPointerEvent<HTMLCanvasElement>) {
-    const point = getImagePoint(event);
+  function isSecondaryMouseButton(event: ReactPointerEvent<HTMLCanvasElement>): boolean {
+    return event.pointerType === "mouse" && event.button !== 0;
+  }
+
+  // ── 브러시 커서 ──
+  function updateCursor(event: ReactPointerEvent<HTMLCanvasElement>) {
+    const cursor = cursorRef.current;
+    if (!cursor) return;
+    if (selectMode !== "brush" || event.pointerType === "touch") {
+      cursor.style.display = "none";
+      return;
+    }
+    const rect = event.currentTarget.getBoundingClientRect();
+    cursor.style.display = "block";
+    cursor.style.width = `${brushSize}px`;
+    cursor.style.height = `${brushSize}px`;
+    cursor.style.left = `${event.clientX - rect.left}px`;
+    cursor.style.top = `${event.clientY - rect.top}px`;
+  }
+
+  function hideCursor() {
+    if (cursorRef.current) cursorRef.current.style.display = "none";
+  }
+
+  // ── 브러시 모드: 누른 채로 움직인 길을 따라 칠하고, 손을 떼면 그 획에 효과를 적용한다 ──
+  function startStroke(event: ReactPointerEvent<HTMLCanvasElement>) {
+    const canvas = event.currentTarget;
+    const rect = canvas.getBoundingClientRect();
+    const point = toImagePoint(canvas, event.clientX, event.clientY);
+    if (!image || !point || rect.width === 0) return;
+
+    canvas.setPointerCapture(event.pointerId);
+    const imagePxPerCssPx = image.width / rect.width;
+    const size = Math.max(1, Math.round(brushSize * imagePxPerCssPx));
+    const start = `M${formatCoord(point.x)} ${formatCoord(point.y)}`;
+    // 길이가 0인 선도 둥근 끝 덕분에 점으로 보인다(한 번 클릭한 경우).
+    const path = `${start} L${formatCoord(point.x)} ${formatCoord(point.y)}`;
+    strokeRef.current = { stroke: { points: [point.x, point.y], size }, minStep: imagePxPerCssPx, path };
+    const preview = strokePathRef.current;
+    if (preview) {
+      preview.setAttribute("stroke-width", String(size));
+      preview.setAttribute("d", path);
+    }
+  }
+
+  function continueStroke(event: ReactPointerEvent<HTMLCanvasElement>) {
+    const active = strokeRef.current;
+    if (!active) return;
+    const canvas = event.currentTarget;
+    const native = event.nativeEvent;
+    const coalesced = typeof native.getCoalescedEvents === "function" ? native.getCoalescedEvents() : [];
+    const samples = coalesced.length > 0 ? coalesced : [native];
+
+    const { points } = active.stroke;
+    for (const sample of samples) {
+      const point = toImagePoint(canvas, sample.clientX, sample.clientY);
+      if (!point) continue;
+      const lastX = points[points.length - 2];
+      const lastY = points[points.length - 1];
+      // 화면 1px보다 짧은 이동은 건너뛰어 점 개수를 줄인다.
+      if (Math.hypot(point.x - lastX, point.y - lastY) < active.minStep) continue;
+      points.push(point.x, point.y);
+      active.path += ` L${formatCoord(point.x)} ${formatCoord(point.y)}`;
+    }
+    strokePathRef.current?.setAttribute("d", active.path);
+  }
+
+  function finishStroke(event: ReactPointerEvent<HTMLCanvasElement>, commit: boolean) {
+    const active = strokeRef.current;
+    if (!active) return;
+    strokeRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    if (!commit) {
+      clearStrokePreview();
+      return;
+    }
+    try {
+      addBrushStroke(active.stroke, selectedTool, intensity);
+      showStatus(`${toolLabel(selectedTool)} 처리가 적용됐어요.`);
+    } catch (error) {
+      clearStrokePreview();
+      showStatus(toUserMessage(error), true);
+    }
+  }
+
+  // ── 사각형 모드: 드래그로 영역을 잡고 '선택 영역 적용'을 누른다 ──
+  function startSelection(event: ReactPointerEvent<HTMLCanvasElement>) {
+    const point = toImagePoint(event.currentTarget, event.clientX, event.clientY);
     if (!point) return;
     event.currentTarget.setPointerCapture(event.pointerId);
     dragStartRef.current = point;
@@ -185,10 +326,10 @@ export function Editor() {
     setIsDrawing(true);
   }
 
-  function handlePointerMove(event: ReactPointerEvent<HTMLCanvasElement>) {
+  function moveSelection(event: ReactPointerEvent<HTMLCanvasElement>) {
     const start = dragStartRef.current;
     if (!isDrawing || !start) return;
-    const point = getImagePoint(event);
+    const point = toImagePoint(event.currentTarget, event.clientX, event.clientY);
     if (!point) return;
     setSelection({
       x: Math.min(start.x, point.x),
@@ -198,7 +339,7 @@ export function Editor() {
     });
   }
 
-  function handlePointerUp(event: ReactPointerEvent<HTMLCanvasElement>) {
+  function endSelection(event: ReactPointerEvent<HTMLCanvasElement>) {
     if (!isDrawing) return;
     setIsDrawing(false);
     dragStartRef.current = null;
@@ -208,6 +349,35 @@ export function Editor() {
     setSelection((current) =>
       current && current.width >= MIN_SELECTION && current.height >= MIN_SELECTION ? current : null,
     );
+  }
+
+  function handlePointerDown(event: ReactPointerEvent<HTMLCanvasElement>) {
+    if (isSecondaryMouseButton(event)) return;
+    if (selectMode === "brush") startStroke(event);
+    else startSelection(event);
+  }
+
+  function handlePointerMove(event: ReactPointerEvent<HTMLCanvasElement>) {
+    updateCursor(event);
+    if (selectMode === "brush") continueStroke(event);
+    else moveSelection(event);
+  }
+
+  function handlePointerUp(event: ReactPointerEvent<HTMLCanvasElement>) {
+    if (selectMode === "brush") finishStroke(event, true);
+    else endSelection(event);
+  }
+
+  function handlePointerCancel(event: ReactPointerEvent<HTMLCanvasElement>) {
+    // 시스템 제스처 등으로 끊긴 획은 적용하지 않는다.
+    if (selectMode === "brush") finishStroke(event, false);
+    else endSelection(event);
+  }
+
+  function changeSelectMode(mode: SelectMode) {
+    setSelectMode(mode);
+    setSelection(null);
+    hideCursor();
   }
 
   function applySelection() {
@@ -222,18 +392,6 @@ export function Editor() {
     } catch (error) {
       showStatus(toUserMessage(error), true);
     }
-  }
-
-  function handleUndo() {
-    if (!undo()) return;
-    setSelection(null);
-    showStatus("이전 작업으로 되돌렸어요.");
-  }
-
-  function handleRedo() {
-    if (!redo()) return;
-    setSelection(null);
-    showStatus("작업을 다시 적용했어요.");
   }
 
   function handleReset() {
@@ -294,6 +452,7 @@ export function Editor() {
   }
 
   const isRedact = selectedTool === "redact";
+  const isBrush = selectMode === "brush";
 
   return (
     <section className="workspace-card" id="editor" aria-label="이미지 편집 영역">
@@ -346,15 +505,27 @@ export function Editor() {
               }}
             />
             {image ? (
-              <div className="canvas-stage">
+              <div className={`canvas-stage ${isBrush ? "is-brush" : ""}`}>
                 <canvas
                   ref={canvasRef}
                   aria-label={`편집 중인 이미지: ${image.fileName}`}
                   onPointerDown={handlePointerDown}
                   onPointerMove={handlePointerMove}
                   onPointerUp={handlePointerUp}
-                  onPointerCancel={handlePointerUp}
+                  onPointerCancel={handlePointerCancel}
+                  onPointerEnter={updateCursor}
+                  onPointerLeave={hideCursor}
                 />
+                {/* 칠하는 동안 보여주는 획 미리보기. 손을 떼면 실제 효과로 바뀐다. */}
+                <svg
+                  className="brush-preview"
+                  viewBox={`0 0 ${image.width} ${image.height}`}
+                  preserveAspectRatio="none"
+                  aria-hidden="true"
+                >
+                  <path ref={strokePathRef} />
+                </svg>
+                <div ref={cursorRef} className="brush-cursor" aria-hidden="true" />
                 {selection && (
                   <div className="selection-box" style={getSelectionStyle(selection, image.width, image.height)}>
                     <span>영역 선택됨</span>
@@ -412,37 +583,89 @@ export function Editor() {
               </button>
             ))}
           </div>
-          <div className="settings-block">
+          <div className="mode-block">
             <div className="settings-label">
-              <span>강도</span>
-              <strong>{isRedact ? "완전 가림" : `${intensity}%`}</strong>
+              <span>영역 지정</span>
             </div>
-            <input
-              className="intensity-range"
-              type="range"
-              min="10"
-              max="100"
-              value={intensity}
-              disabled={isRedact}
-              onChange={(event) => setIntensity(Number(event.target.value))}
-              aria-label="효과 강도"
-            />
-            <div className="range-values">
-              <span>약하게</span>
-              <span>강하게</span>
+            <div className="mode-switch" role="radiogroup" aria-label="영역 지정 방식">
+              <button
+                className={`mode-button ${isBrush ? "is-active" : ""}`}
+                type="button"
+                role="radio"
+                aria-checked={isBrush}
+                onClick={() => changeSelectMode("brush")}
+              >
+                <Brush size={14} /> 브러시로 칠하기
+              </button>
+              <button
+                className={`mode-button ${!isBrush ? "is-active" : ""}`}
+                type="button"
+                role="radio"
+                aria-checked={!isBrush}
+                onClick={() => changeSelectMode("rect")}
+              >
+                <SquareDashed size={14} /> 사각형
+              </button>
             </div>
+          </div>
+          <div className="settings-block">
+            <div className="range-group">
+              <div className="settings-label">
+                <span>강도</span>
+                <strong>{isRedact ? "완전 가림" : `${intensity}%`}</strong>
+              </div>
+              <input
+                className="intensity-range"
+                type="range"
+                min="10"
+                max="100"
+                value={intensity}
+                disabled={isRedact}
+                onChange={(event) => setIntensity(Number(event.target.value))}
+                aria-label="효과 강도"
+              />
+              <div className="range-values">
+                <span>약하게</span>
+                <span>강하게</span>
+              </div>
+            </div>
+            {isBrush && (
+              <div className="range-group">
+                <div className="settings-label">
+                  <span>브러시 크기</span>
+                  <strong>{brushSize}px</strong>
+                </div>
+                <input
+                  className="intensity-range"
+                  type="range"
+                  min={BRUSH_MIN}
+                  max={BRUSH_MAX}
+                  value={brushSize}
+                  onChange={(event) => setBrushSize(Number(event.target.value))}
+                  aria-label="브러시 크기"
+                />
+                <div className="range-values">
+                  <span>가늘게</span>
+                  <span>굵게</span>
+                </div>
+              </div>
+            )}
           </div>
           <div className="selection-note">
             <Info size={15} />
             <span>
-              {selection
-                ? "선택한 영역에 효과를 적용하려면 아래 버튼을 눌러주세요."
-                : "이미지에서 가리고 싶은 영역을 드래그해 주세요."}
+              {isBrush
+                ? "이미지에서 가릴 부분을 칠하면 손을 뗄 때 바로 적용돼요. 잘못 칠했으면 실행 취소(Ctrl+Z)를 누르세요."
+                : selection
+                  ? "선택한 영역에 효과를 적용하려면 아래 버튼을 눌러주세요."
+                  : "이미지에서 가리고 싶은 영역을 드래그해 주세요."}
             </span>
           </div>
-          <button className="apply-button" type="button" onClick={applySelection} disabled={!selection}>
-            <Sparkles size={16} /> 선택 영역 적용
-          </button>
+          {!isBrush && (
+            <button className="apply-button" type="button" onClick={applySelection} disabled={!selection}>
+              <Sparkles size={16} /> 선택 영역 적용
+            </button>
+          )}
           <div className="output-actions">
             <button className="download-button" type="button" onClick={() => void handleDownload()}>
               <ArrowDownToLine size={18} /> 이미지 다운로드

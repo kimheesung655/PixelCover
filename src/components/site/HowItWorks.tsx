@@ -32,7 +32,7 @@ export function HowItWorks() {
           <p>
             가리고 싶은 부분을
             <br />
-            마우스로 드래그해요.
+            마우스로 칠하거나 드래그해요.
           </p>
         </article>
         <article className="step-card">
