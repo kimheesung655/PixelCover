@@ -1,6 +1,8 @@
 import { ImageEditError } from "./image-edit-error";
 import { normalizeRegion, type EditRegion } from "./edit-region";
 
+const MAX_HISTORY_ENTRIES = 50;
+
 export class RegionEditor {
   private regions: EditRegion[] = [];
   private past: EditRegion[][] = [];
@@ -52,6 +54,7 @@ export class RegionEditor {
 
   private record(next: EditRegion[]): void {
     this.past.push(this.regions);
+    if (this.past.length > MAX_HISTORY_ENTRIES) this.past.shift();
     this.regions = next;
     this.future = [];
   }

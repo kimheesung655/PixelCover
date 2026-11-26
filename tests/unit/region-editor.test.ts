@@ -98,3 +98,18 @@ test("실패하거나 값이 같은 변경은 Redo를 보존하고 새 편집은
   expect(editor.redo()).toBe(false);
   expect(editor.getRegions()[0].intensity).toBe(90);
 });
+
+test("최근 편집 50개만 되돌리고 다시 실행할 수 있다", () => {
+  const editor = new RegionEditor(12, 12);
+  editor.add(initial);
+  for (let intensity = 31; intensity <= 85; intensity++) {
+    editor.update("one", { intensity });
+  }
+
+  for (let count = 0; count < 50; count++) expect(editor.undo()).toBe(true);
+  expect(editor.undo()).toBe(false);
+  expect(editor.getRegions()[0].intensity).toBe(35);
+  for (let count = 0; count < 50; count++) expect(editor.redo()).toBe(true);
+  expect(editor.redo()).toBe(false);
+  expect(editor.getRegions()[0].intensity).toBe(85);
+});
