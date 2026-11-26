@@ -48,3 +48,15 @@ test("없는 ID나 유효하지 않은 변경을 거부하고 기존 값을 유�
   expect(() => editor.update("one", { x: 20 })).toThrow(expect.objectContaining({ code: "INVALID_REGION" }));
   expect(editor.getRegions()).toEqual(before);
 });
+
+test("지정한 영역만 삭제하고 나머지 순서를 유지한다", () => {
+  const editor = new RegionEditor(12, 12);
+  editor.add(initial);
+  editor.add({ ...initial, id: "two" });
+  editor.add({ ...initial, id: "three" });
+
+  editor.remove("two");
+
+  expect(editor.getRegions().map(({ id }) => id)).toEqual(["one", "three"]);
+  expect(() => editor.remove("two")).toThrow(expect.objectContaining({ code: "INVALID_REGION" }));
+});

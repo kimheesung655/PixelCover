@@ -27,6 +27,11 @@ export class RegionEditor {
     this.regions = this.regions.map((region, position) => position === index ? next : region);
   }
 
+  remove(id: string): void {
+    const index = this.findIndex(id);
+    this.regions = this.regions.filter((_region, position) => position !== index);
+  }
+
   private findIndex(id: string): number {
     const index = this.regions.findIndex((region) => region.id === id);
     if (index < 0) throw new ImageEditError("INVALID_REGION", "지정한 편집 영역을 찾을 수 없습니다.");
