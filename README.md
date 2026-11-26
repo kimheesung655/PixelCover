@@ -13,7 +13,7 @@ npm run typecheck
 
 `check:setup`은 패키지, 정적 내보내기 설정 및 문서 연결을 검사한다. `test`는 `tests/unit`의 TypeScript 단위 테스트를 실행하고, `typecheck`는 TypeScript 소스와 테스트의 타입을 검사한다.
 
-브라우저 통합 테스트는 `npx playwright install chromium`으로 브라우저를 설치한 뒤 `npm run test:e2e`로 실행한다.
+브라우저 통합 테스트는 `npx playwright install chromium webkit`으로 브라우저를 설치한 뒤 `npm run test:e2e`로 실행한다. 데스크톱 Chromium, Pixel 7 에뮬레이션, iPhone 13 화면을 에뮬레이션한 WebKit에서 검사한다.
 
 - [협업 규칙](AGENTS.md)
 - [담당 영역과 개발 계획](docs/PROJECT_PLAN.md)

@@ -48,6 +48,9 @@ async function decodeImageFile(file: File): Promise<{ bitmap: ImageBitmap; mimeT
 async function createFileBitmap(file: File): Promise<{ bitmap: ImageBitmap; mimeType: InputMime }> {
   try {
     const { mimeType } = await inspectImageFile(file);
+    if (typeof globalThis.createImageBitmap !== "function") {
+      throw new ImageEditError("DECODE_FAILED", "이 브라우저에서는 이미지 비트맵 디코딩을 지원하지 않습니다.");
+    }
     const source = file.type === mimeType ? file : file.slice(0, file.size, mimeType);
     const bitmap = await createImageBitmap(source, { imageOrientation: "from-image" });
     return { bitmap, mimeType };

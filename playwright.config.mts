@@ -6,14 +6,25 @@ const baseURL = "http://127.0.0.1:4173";
 export default defineConfig({
   testDir: "./tests/e2e",
   use: { baseURL },
-  projects: [{
-    name: "chromium",
-    use: {
-      ...devices["Desktop Chrome"],
-      channel: process.env.PIXELCOVER_E2E_CHANNEL,
-      launchOptions: { chromiumSandbox: true },
+  projects: [
+    {
+      name: "chromium",
+      use: {
+        ...devices["Desktop Chrome"],
+        channel: process.env.PIXELCOVER_E2E_CHANNEL,
+        launchOptions: { chromiumSandbox: true },
+      },
     },
-  }],
+    {
+      name: "mobile-chromium",
+      use: {
+        ...devices["Pixel 7"],
+        channel: process.env.PIXELCOVER_E2E_CHANNEL,
+        launchOptions: { chromiumSandbox: true },
+      },
+    },
+    { name: "mobile-webkit", use: { ...devices["iPhone 13"] } },
+  ],
   webServer: {
     command: "npm exec -- vite --host 127.0.0.1 --port 4173 --strictPort",
     url: baseURL + "/tests/e2e/fixtures/engine.html",

@@ -72,6 +72,14 @@ test("치수가 비어 있는 디코딩 결과를 해제한다", async () => {
   expect(bitmap.close).toHaveBeenCalledOnce();
 });
 
+test("이미지 비트맵 API를 지원하지 않는 브라우저에 명확한 오류를 반환한다", async () => {
+  vi.stubGlobal("createImageBitmap", undefined);
+  await expect(decodeImage(jpegHeaderOnly())).rejects.toMatchObject({
+    code: "DECODE_FAILED",
+    message: expect.stringContaining("이 브라우저"),
+  });
+});
+
 test("파일 읽기 실패도 디코딩 오류로 전달한다", async () => {
   const file = jpegHeaderOnly();
   const cause = new DOMException("The original file is unavailable.", "NotReadableError");

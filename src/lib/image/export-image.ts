@@ -21,10 +21,16 @@ export async function exportImage(
 
   let canvas: HTMLCanvasElement | undefined;
   try {
+    if (typeof document === "undefined") {
+      throw new ImageEditError("RENDER_FAILED", "이 환경에서는 브라우저 캔버스를 사용할 수 없습니다.");
+    }
     canvas = document.createElement("canvas");
     const target = canvas.getContext("2d");
     if (!target) {
       throw new ImageEditError("RENDER_FAILED", "출력 캔버스의 2D 컨텍스트를 열 수 없습니다.");
+    }
+    if (typeof canvas.toBlob !== "function") {
+      throw new ImageEditError("EXPORT_FAILED", "이 브라우저에서는 캔버스 파일 인코딩을 지원하지 않습니다.");
     }
     renderImage(image, regions, target);
     if (format === "image/jpeg") {

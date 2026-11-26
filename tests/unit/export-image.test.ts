@@ -61,6 +61,24 @@ test.each([[undefined, 0.92], [0, 0], [0.7, 0.7], [1, 1]])(
   },
 );
 
+test("브라우저 캔버스가 없으면 렌더링 호환성 오류를 반환한다", async () => {
+  vi.stubGlobal("document", undefined);
+  await expect(exportImage(image, [], "image/png")).rejects.toMatchObject({
+    code: "RENDER_FAILED",
+    message: expect.stringContaining("브라우저 캔버스"),
+  });
+});
+
+test("캔버스 인코딩 API가 없으면 그리기 전에 호환성 오류를 반환한다", async () => {
+  const { canvas, context } = installCanvas(null);
+  Reflect.deleteProperty(canvas, "toBlob");
+  await expect(exportImage(image, [], "image/png")).rejects.toMatchObject({
+    code: "EXPORT_FAILED",
+    message: expect.stringContaining("이 브라우저"),
+  });
+  expect(context.drawImage).not.toHaveBeenCalled();
+});
+
 test.each([-0.01, 1.01, NaN, Infinity])("유효하지 않은 JPEG 품질 %s를 거부한다", async (quality) => {
   const { createElement } = installCanvas(null);
   await expect(exportImage(image, [], "image/jpeg", quality)).rejects.toHaveProperty("code", "EXPORT_FAILED");
