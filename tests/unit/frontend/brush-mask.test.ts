@@ -1,11 +1,5 @@
 import { expect, test } from "vitest";
-import {
-  fillPaintedPixels,
-  isPainted,
-  keepPaintedPixels,
-  strokeBounds,
-  type BrushMask,
-} from "../../../src/components/editor/brush-mask";
+import { isPainted, keepPaintedPixels, strokeBounds, type BrushMask } from "../../../src/components/editor/brush-mask";
 import { normalizeRegion } from "../../../src/lib/editor/edit-region";
 
 // 프론트 브러시 모드의 순수 계산 검증(마스크 그리기 자체는 브라우저 캔버스가 필요해 제외).
@@ -55,11 +49,4 @@ test("효과를 낸 픽셀 중 칠하지 않은 곳만 원본으로 되돌린다
   const effect = solid(2, 2, 200);
   keepPaintedPixels(effect, solid(2, 2, 10), area, maskOf(2, 3, ["#.", ".#"]));
   expect([...effect]).toEqual([200, 200, 200, 200, 10, 10, 10, 10, 10, 10, 10, 10, 200, 200, 200, 200]);
-});
-
-test("칠한 픽셀만 불투명 검정으로 덮는다", () => {
-  const area = { x: 0, y: 0, width: 2, height: 1 };
-  const pixels = solid(2, 1, 90);
-  fillPaintedPixels(pixels, area, maskOf(0, 0, ["#."]));
-  expect([...pixels]).toEqual([0, 0, 0, 255, 90, 90, 90, 90]);
 });

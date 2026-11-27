@@ -4,11 +4,11 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties, type Poin
 import {
   ArrowDownToLine,
   Brush,
-  ChevronDown,
   CircleHelp,
   CloudUpload,
   Copy,
   Eraser,
+  EyeOff,
   Image as ImageIcon,
   Info,
   Layers3,
@@ -19,16 +19,17 @@ import {
   SquareDashed,
   Undo2,
   WandSparkles,
+  X,
 } from "lucide-react";
-import type { EffectType } from "../../lib/editor";
 import { toImageCoordinates } from "../../lib/editor/image-coordinates";
-import { useImageEditor, type Area, type BrushStroke } from "../../hooks/useImageEditor";
+import { useImageEditor, type Area, type BrushStroke, type Tool } from "../../hooks/useImageEditor";
 import { toUserMessage } from "./messages";
 
-const TOOLS: { label: string; key: EffectType; icon: typeof Layers3 }[] = [
+const TOOLS: { label: string; key: Tool; icon: typeof Layers3 }[] = [
   { label: "모자이크", key: "mosaic", icon: Layers3 },
   { label: "블러", key: "blur", icon: WandSparkles },
-  { label: "가리기", key: "redact", icon: Eraser },
+  { label: "가리기", key: "redact", icon: EyeOff },
+  { label: "지우개", key: "erase", icon: Eraser },
 ];
 
 type SelectMode = "brush" | "rect";
@@ -36,7 +37,7 @@ type SelectMode = "brush" | "rect";
 const ACCEPT = "image/jpeg,image/png,image/webp";
 // 이보다 작은 드래그(원본 픽셀 기준)는 클릭으로 보고 선택하지 않는다.
 const MIN_SELECTION = 4;
-const COPY_LABEL = "이미지 복사";
+const COPY_LABEL = "복사";
 // 브러시 크기는 화면에 보이는 지름(CSS px)으로 고르고, 칠할 때 원본 픽셀 크기로 바꾼다.
 const BRUSH_MIN = 8;
 const BRUSH_MAX = 120;
@@ -48,8 +49,9 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-function toolLabel(tool: EffectType): string {
-  return TOOLS.find(({ key }) => key === tool)?.label ?? tool;
+function appliedMessage(tool: Tool): string {
+  if (tool === "erase") return "지운 부분을 원래 이미지로 되돌렸어요.";
+  return `${TOOLS.find(({ key }) => key === tool)?.label ?? tool} 처리가 적용됐어요.`;
 }
 
 function formatCoord(value: number): string {
@@ -65,13 +67,28 @@ function getSelectionStyle(selection: Area, imageWidth: number, imageHeight: num
   };
 }
 
+function guideText(mode: SelectMode, tool: Tool, hasSelection: boolean): string {
+  if (mode === "brush") {
+    return tool === "erase"
+      ? "효과를 준 곳을 칠하면 그 부분만 원래 이미지로 돌아가요."
+      : "가릴 부분을 칠하면 손을 뗄 때 바로 적용돼요.";
+  }
+  if (hasSelection) {
+    return tool === "erase"
+      ? "선택한 영역을 원래대로 되돌리려면 아래 버튼을 눌러주세요."
+      : "선택한 영역에 효과를 적용하려면 아래 버튼을 눌러주세요.";
+  }
+  return tool === "erase" ? "원래대로 되돌릴 영역을 드래그해 주세요." : "가리고 싶은 영역을 드래그해 주세요.";
+}
+
 export function Editor() {
   const {
     image,
-    regions,
+    hasEffects,
     canUndo,
     canRedo,
     loadFile,
+    clearImage,
     addRegion,
     addBrushStroke,
     undo,
@@ -81,13 +98,14 @@ export function Editor() {
     exportPng,
   } = useImageEditor();
 
-  const [selectedTool, setSelectedTool] = useState<EffectType>("mosaic");
+  const [tool, setTool] = useState<Tool>("mosaic");
   const [selectMode, setSelectMode] = useState<SelectMode>("brush");
   const [intensity, setIntensity] = useState(40);
   const [brushSize, setBrushSize] = useState(BRUSH_DEFAULT);
   const [selection, setSelection] = useState<Area | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   const [status, setStatus] = useState({ text: "작업을 시작하려면 이미지를 추가하세요", error: false });
   const [copyLabel, setCopyLabel] = useState(COPY_LABEL);
   const [shortcutLabel, setShortcutLabel] = useState("Ctrl O");
@@ -141,7 +159,7 @@ export function Editor() {
     } catch (error) {
       showStatus(toUserMessage(error), true);
     }
-    // 방금 칠한 획의 미리보기 선은 실제 효과가 그려진 뒤에 지운다.
+    // 방금 칠한 획의 미리보기 선은 실제 결과가 그려진 뒤에 지운다.
     clearStrokePreview();
   }, [image, renderPreview, showStatus, clearStrokePreview]);
 
@@ -190,7 +208,11 @@ export function Editor() {
         fileInputRef.current?.click();
       } else if (key === "z" || key === "y") {
         const target = event.target as HTMLElement | null;
-        if (target?.isContentEditable || target?.tagName === "TEXTAREA" || target?.tagName === "INPUT" && (target as HTMLInputElement).type === "text") return;
+        const typing =
+          target?.isContentEditable ||
+          target?.tagName === "TEXTAREA" ||
+          (target?.tagName === "INPUT" && (target as HTMLInputElement).type === "text");
+        if (typing) return;
         event.preventDefault();
         if (key === "y" || event.shiftKey) handleRedo();
         else handleUndo();
@@ -233,6 +255,15 @@ export function Editor() {
     return event.pointerType === "mouse" && event.button !== 0;
   }
 
+  /** 지우개는 지울 효과가 있을 때만 쓴다. */
+  function canUseTool(): boolean {
+    if (tool === "erase" && !hasEffects) {
+      showStatus("아직 지울 효과가 없어요. 먼저 모자이크·블러·가리기를 적용해 주세요.");
+      return false;
+    }
+    return true;
+  }
+
   // ── 브러시 커서 ──
   function updateCursor(event: ReactPointerEvent<HTMLCanvasElement>) {
     const cursor = cursorRef.current;
@@ -253,19 +284,18 @@ export function Editor() {
     if (cursorRef.current) cursorRef.current.style.display = "none";
   }
 
-  // ── 브러시 모드: 누른 채로 움직인 길을 따라 칠하고, 손을 떼면 그 획에 효과를 적용한다 ──
+  // ── 브러시 모드: 누른 채로 움직인 길을 따라 칠하고, 손을 떼면 그 획을 적용한다 ──
   function startStroke(event: ReactPointerEvent<HTMLCanvasElement>) {
     const canvas = event.currentTarget;
     const rect = canvas.getBoundingClientRect();
     const point = toImagePoint(canvas, event.clientX, event.clientY);
-    if (!image || !point || rect.width === 0) return;
+    if (!image || !point || rect.width === 0 || !canUseTool()) return;
 
     canvas.setPointerCapture(event.pointerId);
     const imagePxPerCssPx = image.width / rect.width;
     const size = Math.max(1, Math.round(brushSize * imagePxPerCssPx));
-    const start = `M${formatCoord(point.x)} ${formatCoord(point.y)}`;
     // 길이가 0인 선도 둥근 끝 덕분에 점으로 보인다(한 번 클릭한 경우).
-    const path = `${start} L${formatCoord(point.x)} ${formatCoord(point.y)}`;
+    const path = `M${formatCoord(point.x)} ${formatCoord(point.y)} L${formatCoord(point.x)} ${formatCoord(point.y)}`;
     strokeRef.current = { stroke: { points: [point.x, point.y], size }, minStep: imagePxPerCssPx, path };
     const preview = strokePathRef.current;
     if (preview) {
@@ -308,8 +338,8 @@ export function Editor() {
       return;
     }
     try {
-      addBrushStroke(active.stroke, selectedTool, intensity);
-      showStatus(`${toolLabel(selectedTool)} 처리가 적용됐어요.`);
+      addBrushStroke(active.stroke, tool, intensity);
+      showStatus(appliedMessage(tool));
     } catch (error) {
       clearStrokePreview();
       showStatus(toUserMessage(error), true);
@@ -382,13 +412,14 @@ export function Editor() {
 
   function applySelection() {
     if (!selection || selection.width < MIN_SELECTION || selection.height < MIN_SELECTION) {
-      showStatus("먼저 이미지에서 가릴 영역을 드래그해 주세요.");
+      showStatus("먼저 이미지에서 영역을 드래그해 주세요.");
       return;
     }
+    if (!canUseTool()) return;
     try {
-      addRegion(selection, selectedTool, intensity);
+      addRegion(selection, tool, intensity);
       setSelection(null);
-      showStatus(`${toolLabel(selectedTool)} 처리가 적용됐어요.`);
+      showStatus(appliedMessage(tool));
     } catch (error) {
       showStatus(toUserMessage(error), true);
     }
@@ -398,6 +429,17 @@ export function Editor() {
     reset();
     setSelection(null);
     showStatus("원본 이미지로 초기화했어요.");
+  }
+
+  function handleRemoveImage() {
+    if (hasEffects && !window.confirm("적용한 편집이 모두 사라져요. 현재 이미지를 제거할까요?")) return;
+    strokeRef.current = null;
+    clearStrokePreview();
+    hideCursor();
+    setSelection(null);
+    setIsDrawing(false);
+    clearImage();
+    showStatus("이미지를 제거했어요. 새 이미지를 추가하세요.");
   }
 
   async function handleDownload() {
@@ -429,11 +471,12 @@ export function Editor() {
       window.setTimeout(() => setCopyLabel(COPY_LABEL), 2200);
     };
     if (!image) {
-      flash("이미지를 먼저 추가해 주세요");
+      showStatus("먼저 이미지를 추가해 주세요.");
       return;
     }
     if (!navigator.clipboard?.write || typeof ClipboardItem === "undefined") {
-      flash("브라우저에서 지원하지 않아요");
+      flash("지원 안 됨");
+      showStatus("이 브라우저에서는 이미지 복사를 지원하지 않아요. 다운로드를 이용해 주세요.", true);
       return;
     }
     try {
@@ -446,13 +489,14 @@ export function Editor() {
       flash("복사 완료");
       showStatus("이미지를 클립보드에 복사했어요.");
     } catch {
-      flash("복사할 수 없어요");
+      flash("복사 실패");
       showStatus("브라우저의 클립보드 권한을 확인해 주세요.", true);
     }
   }
 
-  const isRedact = selectedTool === "redact";
   const isBrush = selectMode === "brush";
+  const isErase = tool === "erase";
+  const usesIntensity = tool === "mosaic" || tool === "blur";
 
   return (
     <section className="workspace-card" id="editor" aria-label="이미지 편집 영역">
@@ -467,14 +511,14 @@ export function Editor() {
           </div>
         </div>
         <div className="topbar-actions">
-          <button className="icon-button" type="button" aria-label="실행 취소" onClick={handleUndo} disabled={!canUndo}>
+          <button className="icon-button" type="button" aria-label="실행 취소" title="실행 취소 (Ctrl+Z)" onClick={handleUndo} disabled={!canUndo}>
             <Undo2 size={17} />
           </button>
-          <button className="icon-button" type="button" aria-label="다시 실행" onClick={handleRedo} disabled={!canRedo}>
+          <button className="icon-button" type="button" aria-label="다시 실행" title="다시 실행 (Ctrl+Shift+Z)" onClick={handleRedo} disabled={!canRedo}>
             <Redo2 size={17} />
           </button>
           <span className="topbar-divider" />
-          <button className="reset-button" type="button" onClick={handleReset} disabled={regions.length === 0}>
+          <button className="reset-button" type="button" onClick={handleReset} disabled={!hasEffects}>
             <RotateCcw size={15} /> 초기화
           </button>
         </div>
@@ -487,10 +531,11 @@ export function Editor() {
               <span className="live-dot" /> {image ? `${image.width} × ${image.height}px` : "미리보기"}{" "}
               <span className="meta-divider">/</span> 원본 해상도 유지
             </div>
-            {/* TODO: 확대·축소 보기 미구현 */}
-            <button className="fit-button" type="button">
-              화면에 맞춤 <ChevronDown size={14} />
-            </button>
+            {image && (
+              <button className="remove-image-button" type="button" onClick={handleRemoveImage}>
+                <X size={13} /> 이미지 제거
+              </button>
+            )}
           </div>
           <div className={`canvas-area ${image ? "has-image" : ""} ${isDragging ? "is-dragging" : ""}`}>
             <input
@@ -516,9 +561,9 @@ export function Editor() {
                   onPointerEnter={updateCursor}
                   onPointerLeave={hideCursor}
                 />
-                {/* 칠하는 동안 보여주는 획 미리보기. 손을 떼면 실제 효과로 바뀐다. */}
+                {/* 칠하는 동안 보여주는 획 미리보기. 손을 떼면 실제 결과로 바뀐다. */}
                 <svg
-                  className="brush-preview"
+                  className={`brush-preview ${isErase ? "is-erase" : ""}`}
                   viewBox={`0 0 ${image.width} ${image.height}`}
                   preserveAspectRatio="none"
                   aria-hidden="true"
@@ -560,26 +605,39 @@ export function Editor() {
               <span>EDIT TOOLS</span>
               <h2>편집 도구</h2>
             </div>
-            {/* TODO: 도움말 동작 미구현 */}
-            <button type="button" className="help-button" aria-label="편집 도구 도움말">
+            <button
+              type="button"
+              className={`help-button ${showHelp ? "is-open" : ""}`}
+              aria-label="편집 도구 사용법"
+              aria-expanded={showHelp}
+              aria-controls="editor-help"
+              onClick={() => setShowHelp((open) => !open)}
+            >
               <CircleHelp size={17} />
             </button>
           </div>
-          <div className="tool-list" role="radiogroup" aria-label="가리기 방식">
+          {showHelp && (
+            <div className="help-box" id="editor-help">
+              <p><strong>브러시</strong> 누른 채로 칠하면 손을 뗄 때 바로 적용돼요.</p>
+              <p><strong>사각형</strong> 드래그한 뒤 &apos;선택 영역 적용&apos;을 누르세요.</p>
+              <p><strong>지우개</strong> 효과를 준 곳을 칠하면 원래대로 돌아가요.</p>
+              <p><strong>단축키</strong> Ctrl+Z 실행 취소 · Ctrl+Shift+Z 다시 실행</p>
+            </div>
+          )}
+          <div className="tool-list" role="radiogroup" aria-label="편집 도구">
             {TOOLS.map(({ label, key, icon: Icon }) => (
               <button
-                className={`tool-button ${selectedTool === key ? "is-active" : ""}`}
+                className={`tool-button ${tool === key ? "is-active" : ""}`}
                 type="button"
                 role="radio"
-                aria-checked={selectedTool === key}
+                aria-checked={tool === key}
                 key={key}
-                onClick={() => setSelectedTool(key)}
+                onClick={() => setTool(key)}
               >
                 <span className="tool-icon">
-                  <Icon size={18} />
+                  <Icon size={16} />
                 </span>
                 <span>{label}</span>
-                {selectedTool === key && <span className="tool-selected">선택됨</span>}
               </button>
             ))}
           </div>
@@ -595,7 +653,7 @@ export function Editor() {
                 aria-checked={isBrush}
                 onClick={() => changeSelectMode("brush")}
               >
-                <Brush size={14} /> 브러시로 칠하기
+                <Brush size={14} /> 브러시
               </button>
               <button
                 className={`mode-button ${!isBrush ? "is-active" : ""}`}
@@ -612,7 +670,7 @@ export function Editor() {
             <div className="range-group">
               <div className="settings-label">
                 <span>강도</span>
-                <strong>{isRedact ? "완전 가림" : `${intensity}%`}</strong>
+                <strong>{tool === "redact" ? "완전 가림" : isErase ? "원본 복원" : `${intensity}%`}</strong>
               </div>
               <input
                 className="intensity-range"
@@ -620,14 +678,10 @@ export function Editor() {
                 min="10"
                 max="100"
                 value={intensity}
-                disabled={isRedact}
+                disabled={!usesIntensity}
                 onChange={(event) => setIntensity(Number(event.target.value))}
                 aria-label="효과 강도"
               />
-              <div className="range-values">
-                <span>약하게</span>
-                <span>강하게</span>
-              </div>
             </div>
             {isBrush && (
               <div className="range-group">
@@ -644,34 +698,24 @@ export function Editor() {
                   onChange={(event) => setBrushSize(Number(event.target.value))}
                   aria-label="브러시 크기"
                 />
-                <div className="range-values">
-                  <span>가늘게</span>
-                  <span>굵게</span>
-                </div>
               </div>
             )}
           </div>
           <div className="selection-note">
             <Info size={15} />
-            <span>
-              {isBrush
-                ? "이미지에서 가릴 부분을 칠하면 손을 뗄 때 바로 적용돼요. 잘못 칠했으면 실행 취소(Ctrl+Z)를 누르세요."
-                : selection
-                  ? "선택한 영역에 효과를 적용하려면 아래 버튼을 눌러주세요."
-                  : "이미지에서 가리고 싶은 영역을 드래그해 주세요."}
-            </span>
+            <span>{guideText(selectMode, tool, selection !== null)}</span>
           </div>
           {!isBrush && (
             <button className="apply-button" type="button" onClick={applySelection} disabled={!selection}>
-              <Sparkles size={16} /> 선택 영역 적용
+              <Sparkles size={16} /> {isErase ? "선택 영역 지우기" : "선택 영역 적용"}
             </button>
           )}
           <div className="output-actions">
             <button className="download-button" type="button" onClick={() => void handleDownload()}>
-              <ArrowDownToLine size={18} /> 이미지 다운로드
+              <ArrowDownToLine size={17} /> 다운로드
             </button>
             <button className="copy-button" type="button" onClick={() => void handleCopy()}>
-              <Copy size={16} /> {copyLabel}
+              <Copy size={15} /> {copyLabel}
             </button>
           </div>
         </aside>

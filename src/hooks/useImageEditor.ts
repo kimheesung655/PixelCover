@@ -4,10 +4,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { decodeImage, type EditRegion, type EffectType } from "../lib/editor";
 import { RegionEditor } from "../lib/editor/region-editor";
 import { createExportFilename } from "../lib/image/export-filename";
-import { rasterizeStroke, strokeBounds, type Area, type BrushMask, type BrushStroke } from "../components/editor/brush-mask";
-import { exportEdits, renderEdits } from "../components/editor/render-edits";
+import { rasterizeStroke, strokeBounds, type Area, type BrushStroke } from "../components/editor/brush-mask";
+import { exportEdits, renderEdits, type EditOp } from "../components/editor/render-edits";
 
 export type { Area, BrushStroke } from "../components/editor/brush-mask";
+
+/** 화면에서 고르는 도구. 'erase'(지우개)는 적용한 효과를 지우고 원본으로 되돌린다. */
+export type Tool = EffectType | "erase";
 
 // RegionEditor가 보관하는 실행 취소 단계 수(MAX_HISTORY_ENTRIES)와 같게 맞춘다.
 const MAX_UNDO_STEPS = 50;
@@ -21,9 +24,9 @@ export type LoadedImage = {
 
 /**
  * 이미지 처리 엔진(src/lib)과 화면 상태를 잇는다.
- * - 디코딩한 비트맵은 이 훅이 소유하고, 교체·종료 시 진행 중인 내보내기가 끝난 뒤 닫는다.
- * - 편집 영역과 실행 취소 이력은 엔진의 RegionEditor가 관리한다.
- * - 브러시 영역은 RegionEditor에 획을 감싸는 사각형으로 넣고, 칠한 픽셀 마스크는 영역 ID로 따로 보관한다.
+ * - 디코딩한 비트맵은 이 훅이 소유하고, 교체·제거·종료 시 진행 중인 내보내기가 끝난 뒤 닫는다.
+ * - 편집 영역과 실행 취소 이력은 엔진의 RegionEditor가 관리한다(브러시 한 획, 지우개 한 획도 한 단계).
+ * - 칠한 모양과 지우개 여부처럼 엔진이 아직 모르는 정보는 영역 ID별로 따로 보관한다.
  */
 export function useImageEditor() {
   const [image, setImage] = useState<LoadedImage | null>(null);
@@ -33,7 +36,7 @@ export function useImageEditor() {
 
   const imageRef = useRef<LoadedImage | null>(null);
   const editorRef = useRef<RegionEditor | null>(null);
-  const masksRef = useRef(new Map<string, BrushMask>());
+  const opsRef = useRef(new Map<string, EditOp>());
   const loadIdRef = useRef(0);
   const regionSeqRef = useRef(0);
   const pendingExportsRef = useRef(new Set<Promise<unknown>>());
@@ -48,6 +51,14 @@ export function useImageEditor() {
     };
   }, [releaseBitmap]);
 
+  const resetEdits = useCallback((next: LoadedImage | null) => {
+    editorRef.current = next ? new RegionEditor(next.width, next.height) : null;
+    opsRef.current = new Map();
+    setRegions([]);
+    setUndoSteps(0);
+    setRedoSteps(0);
+  }, []);
+
   /** 새 이미지를 연다. 검증·디코딩 오류는 ImageEditError로 던진다. 더 나중 요청에 밀려 버려졌으면 false. */
   const loadFile = useCallback(
     async (file: File): Promise<boolean> => {
@@ -61,54 +72,60 @@ export function useImageEditor() {
       const previous = imageRef.current;
       const next: LoadedImage = { bitmap, fileName: file.name, width: bitmap.width, height: bitmap.height };
       imageRef.current = next;
-      editorRef.current = new RegionEditor(bitmap.width, bitmap.height);
-      masksRef.current = new Map();
+      resetEdits(next);
       setImage(next);
-      setRegions([]);
-      setUndoSteps(0);
-      setRedoSteps(0);
       if (previous) releaseBitmap(previous.bitmap);
       return true;
     },
-    [releaseBitmap],
+    [releaseBitmap, resetEdits],
   );
 
-  const recordAdded = useCallback((editor: RegionEditor) => {
-    setRegions(editor.getRegions());
-    setUndoSteps((steps) => Math.min(steps + 1, MAX_UNDO_STEPS));
-    setRedoSteps(0);
-  }, []);
+  /** 현재 이미지를 내려놓고 처음 화면으로 돌아간다. 열리는 중인 이미지도 버린다. */
+  const clearImage = useCallback(() => {
+    loadIdRef.current += 1;
+    const previous = imageRef.current;
+    imageRef.current = null;
+    resetEdits(null);
+    setImage(null);
+    if (previous) releaseBitmap(previous.bitmap);
+  }, [releaseBitmap, resetEdits]);
 
   const nextRegionId = () => {
     regionSeqRef.current += 1;
     return `region-${regionSeqRef.current}`;
   };
 
-  /** 사각형 영역에 효과를 적용한다. */
+  /** 영역 하나를 이력에 추가한다. 지우개는 엔진에 'redact'로 넣고 프론트 정보로 지우개임을 표시한다. */
+  const record = useCallback((area: Area, tool: Tool, intensity: number, op: EditOp | undefined) => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const id = nextRegionId();
+    const type: EffectType = tool === "erase" ? "redact" : tool;
+    editor.add({ id, type, intensity: tool === "erase" ? 1 : Math.round(intensity), ...area });
+    if (op) opsRef.current.set(id, op);
+    setRegions(editor.getRegions());
+    setUndoSteps((steps) => Math.min(steps + 1, MAX_UNDO_STEPS));
+    setRedoSteps(0);
+  }, []);
+
+  /** 사각형 영역에 효과를 적용하거나(지우개면) 되돌린다. */
   const addRegion = useCallback(
-    (area: Area, type: EffectType, intensity: number) => {
-      const editor = editorRef.current;
-      if (!editor) return;
-      editor.add({ id: nextRegionId(), type, intensity: Math.round(intensity), ...area });
-      recordAdded(editor);
+    (area: Area, tool: Tool, intensity: number) => {
+      record(area, tool, intensity, tool === "erase" ? { erase: true } : undefined);
     },
-    [recordAdded],
+    [record],
   );
 
-  /** 브러시로 칠한 한 획에 효과를 적용한다. 한 획이 실행 취소 한 단계다. */
+  /** 브러시로 칠한 한 획에 효과를 적용하거나(지우개면) 되돌린다. */
   const addBrushStroke = useCallback(
-    (stroke: BrushStroke, type: EffectType, intensity: number) => {
-      const editor = editorRef.current;
+    (stroke: BrushStroke, tool: Tool, intensity: number) => {
       const current = imageRef.current;
-      if (!editor || !current) return;
+      if (!current) return;
       const area = strokeBounds(stroke, current.width, current.height);
       const mask = rasterizeStroke(stroke, area);
-      const id = nextRegionId();
-      editor.add({ id, type, intensity: Math.round(intensity), ...area });
-      masksRef.current.set(id, mask);
-      recordAdded(editor);
+      record(area, tool, intensity, { erase: tool === "erase", mask });
     },
-    [recordAdded],
+    [record],
   );
 
   const undo = useCallback((): boolean => {
@@ -131,20 +148,14 @@ export function useImageEditor() {
 
   /** 적용한 효과를 모두 지우고 원본 상태로 돌아간다(이력도 비운다). */
   const reset = useCallback(() => {
-    const current = imageRef.current;
-    if (!current) return;
-    editorRef.current = new RegionEditor(current.width, current.height);
-    masksRef.current = new Map();
-    setRegions([]);
-    setUndoSteps(0);
-    setRedoSteps(0);
-  }, []);
+    if (imageRef.current) resetEdits(imageRef.current);
+  }, [resetEdits]);
 
   /** 현재 편집 상태를 원본 크기 캔버스에 그린다. 화면 표시 크기는 CSS가 줄인다. */
   const renderPreview = useCallback(
     (context: CanvasRenderingContext2D) => {
       if (!image) return;
-      renderEdits(image.bitmap, regions, masksRef.current, context);
+      renderEdits(image.bitmap, regions, opsRef.current, context);
     },
     [image, regions],
   );
@@ -155,7 +166,7 @@ export function useImageEditor() {
     const editor = editorRef.current;
     if (!current || !editor) return null;
 
-    const task = exportEdits(current.bitmap, editor.getRegions(), masksRef.current);
+    const task = exportEdits(current.bitmap, editor.getRegions(), opsRef.current);
     pendingExportsRef.current.add(task);
     try {
       const blob = await task;
@@ -168,9 +179,11 @@ export function useImageEditor() {
   return {
     image,
     regions,
+    hasEffects: regions.length > 0,
     canUndo: undoSteps > 0,
     canRedo: redoSteps > 0,
     loadFile,
+    clearImage,
     addRegion,
     addBrushStroke,
     undo,

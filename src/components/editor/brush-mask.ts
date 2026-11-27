@@ -117,17 +117,3 @@ export function keepPaintedPixels(
     }
   }
 }
-
-/** 칠한 픽셀을 불투명 검정으로 덮는다. 엔진의 가리기(#000, 알파 255)와 같은 값이다. */
-export function fillPaintedPixels(pixels: Uint8ClampedArray, area: Area, mask: BrushMask): void {
-  for (let row = 0; row < area.height; row++) {
-    for (let col = 0; col < area.width; col++) {
-      if (!isPainted(mask, area.x + col, area.y + row)) continue;
-      const i = (row * area.width + col) * 4;
-      pixels[i] = 0;
-      pixels[i + 1] = 0;
-      pixels[i + 2] = 0;
-      pixels[i + 3] = 255;
-    }
-  }
-}
