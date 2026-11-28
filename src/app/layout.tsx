@@ -13,6 +13,7 @@ export const metadata: Metadata = {
   title: siteCopy.ko.title,
   description: "사진이나 스크린샷에 모자이크, 블러, 불투명 가리기를 적용하고 PNG로 저장하세요. 가입이나 설치 없이 브라우저에서 편집하고, 사진은 서버로 보내지 않습니다.",
   applicationName: "PixelCover",
+  verification: { google: "l9QSstiae9THZ5_1HPALXMNGrXLa7Etg3SYmV3_1FHk" },
 };
 
 export const viewport: Viewport = {
