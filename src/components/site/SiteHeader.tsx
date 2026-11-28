@@ -16,25 +16,25 @@ export function SiteHeader({ isLightTheme, onToggleTheme }: Props) {
           Pixel<span>Cover</span>
         </span>
       </a>
-      <nav className="desktop-nav" aria-label="주요 메뉴">
-        <a href="#editor">편집 도구</a>
-        <a href="#how-to">사용 방법</a>
-        <div className="faq-nav-item">
+      <div className="header-navigation">
+        <nav className="desktop-nav" aria-label="주요 메뉴">
+          <a href="#editor">편집 도구</a>
+          <a href="#how-to">사용 방법</a>
           <a href="#faq">자주 묻는 질문</a>
-          <button
-            className={`theme-toggle ${isLightTheme ? "is-light" : ""}`}
-            type="button"
-            aria-label={isLightTheme ? "Black 테마로 전환" : "White 테마로 전환"}
-            aria-pressed={isLightTheme}
-            onClick={onToggleTheme}
-          >
-            <span className="theme-toggle-track">
-              <span className="theme-toggle-thumb">{isLightTheme ? <Sun size={11} /> : <Moon size={11} />}</span>
-            </span>
-            <span>{isLightTheme ? "WHITE" : "BLACK"}</span>
-          </button>
-        </div>
-      </nav>
+        </nav>
+        <button
+          className={`theme-toggle ${isLightTheme ? "is-light" : ""}`}
+          type="button"
+          aria-label={isLightTheme ? "Black 테마로 전환" : "White 테마로 전환"}
+          aria-pressed={isLightTheme}
+          onClick={onToggleTheme}
+        >
+          <span className="theme-toggle-track">
+            <span className="theme-toggle-thumb">{isLightTheme ? <Sun size={11} /> : <Moon size={11} />}</span>
+          </span>
+          <span>{isLightTheme ? "WHITE" : "BLACK"}</span>
+        </button>
+      </div>
       <div className="header-actions">
         <span className="privacy-chip">
           <LockKeyhole size={13} /> 브라우저에서 안전하게 처리
