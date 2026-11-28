@@ -11,6 +11,7 @@ import { SiteFooter } from "./site/SiteFooter";
 import { SiteHeader } from "./site/SiteHeader";
 
 const LANGUAGE_KEY = "pixelcover-language";
+const THEME_KEY = "pixelcover-theme";
 
 export function PixelCoverApp() {
   const [isLightTheme, setIsLightTheme] = useState(false);
@@ -21,6 +22,7 @@ export function PixelCoverApp() {
     try {
       const saved = window.localStorage.getItem(LANGUAGE_KEY);
       if (saved === "ko" || saved === "en") setLanguage(saved);
+      setIsLightTheme(window.localStorage.getItem(THEME_KEY) === "light");
     } catch {
       // The language still works when storage is unavailable.
     }
@@ -30,6 +32,16 @@ export function PixelCoverApp() {
     document.documentElement.lang = language;
     document.title = copy.title;
   }, [language, copy.title]);
+
+  function toggleTheme() {
+    const next = !isLightTheme;
+    setIsLightTheme(next);
+    try {
+      window.localStorage.setItem(THEME_KEY, next ? "light" : "dark");
+    } catch {
+      // The theme still works when storage is unavailable.
+    }
+  }
 
   function toggleLanguage() {
     const next = language === "ko" ? "en" : "ko";
@@ -53,7 +65,7 @@ export function PixelCoverApp() {
           language={language}
           onToggleLanguage={toggleLanguage}
           isLightTheme={isLightTheme}
-          onToggleTheme={() => setIsLightTheme((current) => !current)}
+          onToggleTheme={toggleTheme}
         />
         <main id="top">
           <HeroSection copy={copy} />
