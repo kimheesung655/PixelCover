@@ -1,6 +1,8 @@
 import { ShieldCheck } from "lucide-react";
 
-export function SiteFooter() {
+import type { SiteCopy } from "../copy";
+
+export function SiteFooter({ copy }: { copy: SiteCopy }) {
   return (
     <footer className="site-footer">
       <div className="brand footer-brand">
@@ -11,7 +13,7 @@ export function SiteFooter() {
           Pixel<span>Cover</span>
         </span>
       </div>
-      <p>Simple tools for a more private internet.</p>
+      <p>{copy.footer}</p>
       <span className="footer-copyright">© 2026 PixelCover</span>
     </footer>
   );

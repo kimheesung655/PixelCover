@@ -37,10 +37,12 @@ a { color: inherit; text-decoration: none; }
 .brand-mark { width: 31px; height: 31px; border: 1px solid #425043; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; color: #a9f15e; background: #1a241c; box-shadow: 0 0 22px rgba(169, 241, 94, .08); }
 .desktop-nav { display: flex; gap: 31px; color: #7e8790; font-size: 12px; }
 .desktop-nav a { transition: color .2s ease; }
-.desktop-nav a:hover, .all-link:hover { color: #a9f15e; }
-.faq-nav-item { display: flex; align-items: center; gap: 12px; }
+.desktop-nav a:hover, .faq-toggle-all:hover { color: #a9f15e; }
+.header-navigation { display: flex; align-items: center; gap: 20px; }
 .theme-toggle { display: inline-flex; align-items: center; gap: 6px; border: 0; color: #7a8790; background: transparent; padding: 0; font: 500 9px var(--font-dm-mono), monospace; letter-spacing: .03em; transition: color .2s ease; }
 .theme-toggle:hover { color: #dce4e7; }
+.language-toggle { min-height: 32px; padding: 4px 9px; border: 1px solid #303a43; border-radius: 7px; color: #c1cbd0; background: transparent; font-size: 11px; white-space: nowrap; }
+.language-toggle:hover { color: #a9f15e; border-color: #647e50; }
 .theme-toggle-track { width: 25px; height: 14px; display: inline-flex; align-items: center; padding: 2px; border-radius: 99px; background: #303a43; transition: background .2s ease; }
 .theme-toggle-thumb { width: 10px; height: 10px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; color: #10150f; background: #a9f15e; transform: translateX(0); transition: transform .2s ease, background .2s ease, color .2s ease; }
 .theme-toggle.is-light .theme-toggle-track { background: #d0d7dc; }
@@ -48,6 +50,7 @@ a { color: inherit; text-decoration: none; }
 .header-actions { display: flex; align-items: center; gap: 15px; }
 .privacy-chip { color: #818b94; border: 1px solid #252c33; background: #11151a; padding: 9px 11px; border-radius: 999px; display: inline-flex; gap: 6px; align-items: center; font-size: 10px; }
 .privacy-chip svg { color: #9bd95d; }
+.mobile-nav { display: none; }
 .menu-button { display: none; color: #d7dce0; border: 0; background: transparent; padding: 7px; }
 
 .hero-section { padding: 77px 0 58px; text-align: center; }
@@ -77,8 +80,8 @@ a { color: inherit; text-decoration: none; }
 .topbar-divider { height: 20px; width: 1px; background: #293138; margin: 0 9px; }
 .reset-button { gap: 6px; font-size: 10px; color: #75808a; }
 .reset-button:hover { color: #dce1e4; }
-.editor-layout { display: grid; grid-template-columns: minmax(0, 1fr) 262px; min-height: 500px; }
-.canvas-panel { padding: 16px 18px 18px; min-width: 0; display: flex; flex-direction: column; }
+.editor-layout { display: grid; grid-template-columns: minmax(0, 1fr) 262px; }
+.canvas-panel { align-self: start; min-height: 500px; padding: 16px 18px 18px; min-width: 0; display: flex; flex-direction: column; }
 .canvas-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 26px; margin: 0 3px 10px; }
 .canvas-meta { color: #84909a; font-size: 10px; display: flex; gap: 8px; align-items: center; }
 .live-dot { width: 5px; height: 5px; background: #6d7882; box-shadow: none; }
@@ -150,6 +153,8 @@ a { color: inherit; text-decoration: none; }
 .apply-button { width: 100%; height: 38px; border: 1px solid #4b613e; border-radius: 7px; color: #baf182; background: #243025; display: flex; align-items: center; justify-content: center; gap: 7px; font-size: 10px; font-weight: 700; transition: all .2s ease; }
 .apply-button:hover:not(:disabled) { color: #10170d; border-color: #a9f15e; background: #a9f15e; }
 .apply-button:disabled { cursor: not-allowed; opacity: .45; }
+.privacy-tip { margin: 8px 4px 0; color: #a6b0b8; font-size: 11px; line-height: 1.55; }
+.theme-light .privacy-tip { color: #526067; }
 .output-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
 .download-button, .copy-button { width: 100%; height: 40px; border-radius: 7px; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 11px; font-weight: 800; transition: transform .2s ease, background .2s ease, color .2s ease, border-color .2s ease; }
 .download-button { border: 0; background: #a9f15e; color: #11170e; }
@@ -175,11 +180,8 @@ a { color: inherit; text-decoration: none; }
 .trust-banner strong { font-size: 12px; color: #c9e9aa; }
 .trust-banner p { margin: 5px 0 0; color: #718070; font-size: 10px; }
 .trust-shield { color: #adf067; opacity: .07; position: absolute; right: 29px; transform: rotate(14deg); }
-.all-link { color: #8f9a9f; font-size: 11px; transition: color .2s ease; }
-.all-link span { color: #a9f15e; margin-left: 4px; }
-.faq-heading-actions { display: flex; align-items: center; gap: 19px; }
-.section-theme-button { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #2d393e; border-radius: 999px; padding: 7px 10px; color: #8d999e; background: #13191d; font-size: 10px; transition: all .2s ease; }
-.section-theme-button:hover { border-color: #a9f15e; color: #a9f15e; }
+.faq-toggle-all { flex-shrink: 0; padding: 6px 0; border: 0; background: transparent; color: #8f9a9f; font-size: 11px; transition: color .2s ease; }
+.faq-toggle-all span { color: #a9f15e; margin-left: 4px; }
 .faq-list { border-top: 1px solid #293139; }
 .faq-entry { border-bottom: 1px solid #293139; }
 .faq-item { width: 100%; padding: 20px 2px; display: flex; align-items: center; justify-content: space-between; border: 0; background: transparent; color: #b2bbc1; font-size: 12px; text-align: left; transition: color .2s ease, padding .2s ease; }
@@ -202,6 +204,8 @@ a { color: inherit; text-decoration: none; }
 .theme-light .brand > span:last-child > span { color: #4d852d; }
 .theme-light .desktop-nav { color: #778286; }
 .theme-light .theme-toggle { color: #637077; }
+.theme-light .language-toggle { color: #526067; border-color: #cbd7d5; }
+.theme-light .language-toggle:hover { color: #4d8a2d; border-color: #75a45d; }
 .theme-light .theme-toggle-thumb { color: #f8fafb; background: #20272d; }
 .theme-light .privacy-chip { color: #66747b; border-color: #d9e2e1; background: #f8faf9; }
 .theme-light .privacy-chip svg { color: #559538; }
@@ -267,8 +271,8 @@ a { color: inherit; text-decoration: none; }
 .theme-light .faq-item { color: #526067; }
 .theme-light .faq-item:hover { color: #4d8a2d; }
 .theme-light .faq-answer { color: #66747a; }
-.theme-light .section-theme-button { border-color: #cbdad5; color: #617076; background: #f8fbfa; }
-.theme-light .section-theme-button:hover { border-color: #75a45d; color: #4d8a2d; }
+.theme-light .faq-toggle-all { color: #526067; }
+.theme-light .faq-toggle-all:hover, .theme-light .faq-toggle-all span { color: #4d8a2d; }
 .theme-light .site-footer { color: #748187; }
 .theme-light .footer-copyright { color: #8b979b; }
 .theme-light .ad-rail { border-color: #dce5e2; background: rgba(250, 252, 251, .7); color: #82908d; }
@@ -280,8 +284,15 @@ a { color: inherit; text-decoration: none; }
 }
 @media (max-width: 760px) {
   .page-wrap { padding: 0 16px; }
-  .site-header { height: 70px; }
+  .site-header { height: 70px; position: relative; z-index: 6; }
+  .mobile-nav:not([hidden]) { display: grid; gap: 2px; position: absolute; top: 100%; right: 0; min-width: 172px; padding: 7px; border: 1px solid #303a43; border-radius: 8px; background: #171c23; }
+  .mobile-nav a { padding: 9px 10px; font-size: 12px; border-radius: 5px; }
+  .mobile-nav a:hover, .mobile-nav a:focus-visible { background: #303a43; }
+  .theme-light .mobile-nav { background: #f8faf9; border-color: #cbd7d5; }
+  .theme-light .mobile-nav a:hover, .theme-light .mobile-nav a:focus-visible { background: #e7efeb; }
+  .theme-light .menu-button { color: #526067; }
   .desktop-nav, .privacy-chip { display: none; }
+  .header-navigation { gap: 10px; margin-left: auto; margin-right: 10px; }
   .menu-button { display: inline-flex; }
   .hero-section { padding: 57px 0 38px; }
   .hero-section h1 { font-size: 39px; }
@@ -293,7 +304,7 @@ a { color: inherit; text-decoration: none; }
   /* 오류 안내는 모바일에서도 보여야 한다 */
   .workspace-title small.is-error { display: block; }
   .editor-layout { display: block; }
-  .canvas-panel { padding: 14px; }
+  .canvas-panel { min-height: 0; padding: 14px; }
   .canvas-area { min-height: 360px; }
   .tools-panel { border-left: 0; border-top: 1px solid #252c33; padding: 20px 17px 17px; }
   .tool-list { grid-template-columns: repeat(4, 1fr); gap: 5px; }
