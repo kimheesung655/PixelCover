@@ -698,6 +698,7 @@ export function Editor({ language }: { language: Language }) {
               <Sparkles size={16} /> {isErase ? copy.eraseSelection : copy.apply}
             </button>
           )}
+          <p className="privacy-tip">{copy.privacyTip}</p>
           <div className="output-actions">
             <button className="download-button" type="button" onClick={() => void handleDownload()}>
               <ArrowDownToLine size={17} /> {copy.download}
