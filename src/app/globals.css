@@ -41,6 +41,8 @@ a { color: inherit; text-decoration: none; }
 .header-navigation { display: flex; align-items: center; gap: 20px; }
 .theme-toggle { display: inline-flex; align-items: center; gap: 6px; border: 0; color: #7a8790; background: transparent; padding: 0; font: 500 9px var(--font-dm-mono), monospace; letter-spacing: .03em; transition: color .2s ease; }
 .theme-toggle:hover { color: #dce4e7; }
+.language-toggle { min-height: 32px; padding: 4px 9px; border: 1px solid #303a43; border-radius: 7px; color: #c1cbd0; background: transparent; font-size: 11px; white-space: nowrap; }
+.language-toggle:hover { color: #a9f15e; border-color: #647e50; }
 .theme-toggle-track { width: 25px; height: 14px; display: inline-flex; align-items: center; padding: 2px; border-radius: 99px; background: #303a43; transition: background .2s ease; }
 .theme-toggle-thumb { width: 10px; height: 10px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; color: #10150f; background: #a9f15e; transform: translateX(0); transition: transform .2s ease, background .2s ease, color .2s ease; }
 .theme-toggle.is-light .theme-toggle-track { background: #d0d7dc; }
@@ -199,6 +201,8 @@ a { color: inherit; text-decoration: none; }
 .theme-light .brand > span:last-child > span { color: #4d852d; }
 .theme-light .desktop-nav { color: #778286; }
 .theme-light .theme-toggle { color: #637077; }
+.theme-light .language-toggle { color: #526067; border-color: #cbd7d5; }
+.theme-light .language-toggle:hover { color: #4d8a2d; border-color: #75a45d; }
 .theme-light .theme-toggle-thumb { color: #f8fafb; background: #20272d; }
 .theme-light .privacy-chip { color: #66747b; border-color: #d9e2e1; background: #f8faf9; }
 .theme-light .privacy-chip svg { color: #559538; }
@@ -279,7 +283,7 @@ a { color: inherit; text-decoration: none; }
   .page-wrap { padding: 0 16px; }
   .site-header { height: 70px; }
   .desktop-nav, .privacy-chip { display: none; }
-  .header-navigation { margin-left: auto; margin-right: 14px; }
+  .header-navigation { gap: 10px; margin-left: auto; margin-right: 10px; }
   .menu-button { display: inline-flex; }
   .hero-section { padding: 57px 0 38px; }
   .hero-section h1 { font-size: 39px; }

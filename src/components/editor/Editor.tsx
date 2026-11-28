@@ -23,13 +23,14 @@ import {
 } from "lucide-react";
 import { toImageCoordinates } from "../../lib/editor/image-coordinates";
 import { useImageEditor, type Area, type BrushStroke, type Tool } from "../../hooks/useImageEditor";
-import { toUserMessage } from "./messages";
+import type { Language } from "../copy";
+import { editorCopy, getErrorStatus, type CopyState, type EditorStatus } from "./messages";
 
-const TOOLS: { label: string; key: Tool; icon: typeof Layers3 }[] = [
-  { label: "모자이크", key: "mosaic", icon: Layers3 },
-  { label: "블러", key: "blur", icon: WandSparkles },
-  { label: "가리기", key: "redact", icon: EyeOff },
-  { label: "지우개", key: "erase", icon: Eraser },
+const TOOLS: { key: Tool; icon: typeof Layers3 }[] = [
+  { key: "mosaic", icon: Layers3 },
+  { key: "blur", icon: WandSparkles },
+  { key: "redact", icon: EyeOff },
+  { key: "erase", icon: Eraser },
 ];
 
 type SelectMode = "brush" | "rect";
@@ -37,7 +38,6 @@ type SelectMode = "brush" | "rect";
 const ACCEPT = "image/jpeg,image/png,image/webp";
 // 이보다 작은 드래그(원본 픽셀 기준)는 클릭으로 보고 선택하지 않는다.
 const MIN_SELECTION = 4;
-const COPY_LABEL = "복사";
 // 브러시 크기는 화면에 보이는 지름(CSS px)으로 고르고, 칠할 때 원본 픽셀 크기로 바꾼다.
 const BRUSH_MIN = 8;
 const BRUSH_MAX = 120;
@@ -47,11 +47,6 @@ type ActiveStroke = { stroke: BrushStroke; minStep: number; path: string };
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
-}
-
-function appliedMessage(tool: Tool): string {
-  if (tool === "erase") return "지운 부분을 원래 이미지로 되돌렸어요.";
-  return `${TOOLS.find(({ key }) => key === tool)?.label ?? tool} 처리가 적용됐어요.`;
 }
 
 function formatCoord(value: number): string {
@@ -67,21 +62,14 @@ function getSelectionStyle(selection: Area, imageWidth: number, imageHeight: num
   };
 }
 
-function guideText(mode: SelectMode, tool: Tool, hasSelection: boolean): string {
-  if (mode === "brush") {
-    return tool === "erase"
-      ? "효과를 준 곳을 칠하면 그 부분만 원래 이미지로 돌아가요."
-      : "가릴 부분을 칠하면 손을 뗄 때 바로 적용돼요.";
-  }
-  if (hasSelection) {
-    return tool === "erase"
-      ? "선택한 영역을 원래대로 되돌리려면 아래 버튼을 눌러주세요."
-      : "선택한 영역에 효과를 적용하려면 아래 버튼을 눌러주세요.";
-  }
-  return tool === "erase" ? "원래대로 되돌릴 영역을 드래그해 주세요." : "가리고 싶은 영역을 드래그해 주세요.";
+function getGuideKey(mode: SelectMode, tool: Tool, hasSelection: boolean) {
+  if (mode === "brush") return tool === "erase" ? "eraseBrush" : "brush";
+  if (hasSelection) return tool === "erase" ? "applyErase" : "apply";
+  return tool === "erase" ? "eraseRect" : "rect";
 }
 
-export function Editor() {
+export function Editor({ language }: { language: Language }) {
+  const copy = editorCopy[language];
   const {
     image,
     hasEffects,
@@ -106,8 +94,8 @@ export function Editor() {
   const [isDrawing, setIsDrawing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
-  const [status, setStatus] = useState({ text: "작업을 시작하려면 이미지를 추가하세요", error: false });
-  const [copyLabel, setCopyLabel] = useState(COPY_LABEL);
+  const [status, setStatus] = useState<{ key: EditorStatus; error: boolean }>({ key: "ready", error: false });
+  const [copyState, setCopyState] = useState<CopyState>("ready");
   const [shortcutLabel, setShortcutLabel] = useState("Ctrl O");
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -117,7 +105,7 @@ export function Editor() {
   const strokePathRef = useRef<SVGPathElement>(null);
   const cursorRef = useRef<HTMLDivElement>(null);
 
-  const showStatus = useCallback((text: string, error = false) => setStatus({ text, error }), []);
+  const showStatus = useCallback((key: EditorStatus, error = false) => setStatus({ key, error }), []);
 
   const clearStrokePreview = useCallback(() => {
     strokePathRef.current?.setAttribute("d", "");
@@ -125,14 +113,14 @@ export function Editor() {
 
   const handleFile = useCallback(
     async (file: File) => {
-      showStatus("이미지를 여는 중이에요…");
+      showStatus("loading");
       try {
         const loaded = await loadFile(file);
         if (!loaded) return;
         setSelection(null);
-        showStatus(selectMode === "brush" ? "가릴 부분을 마우스로 칠해 보세요" : "영역을 드래그해 편집을 시작하세요");
+        showStatus(selectMode === "brush" ? "brushReady" : "rectReady");
       } catch (error) {
-        showStatus(toUserMessage(error), true);
+        showStatus(getErrorStatus(error), true);
       }
     },
     [loadFile, showStatus, selectMode],
@@ -141,13 +129,13 @@ export function Editor() {
   const handleUndo = useCallback(() => {
     if (!undo()) return;
     setSelection(null);
-    showStatus("이전 작업으로 되돌렸어요.");
+    showStatus("undone");
   }, [undo, showStatus]);
 
   const handleRedo = useCallback(() => {
     if (!redo()) return;
     setSelection(null);
-    showStatus("작업을 다시 적용했어요.");
+    showStatus("redone");
   }, [redo, showStatus]);
 
   // 엔진 렌더러로 원본 크기 캔버스를 다시 그린다. 화면 표시 크기는 CSS가 줄인다.
@@ -157,7 +145,7 @@ export function Editor() {
     try {
       renderPreview(context);
     } catch (error) {
-      showStatus(toUserMessage(error), true);
+      showStatus(getErrorStatus(error), true);
     }
     // 방금 칠한 획의 미리보기 선은 실제 결과가 그려진 뒤에 지운다.
     clearStrokePreview();
@@ -258,7 +246,7 @@ export function Editor() {
   /** 지우개는 지울 효과가 있을 때만 쓴다. */
   function canUseTool(): boolean {
     if (tool === "erase" && !hasEffects) {
-      showStatus("아직 지울 효과가 없어요. 먼저 모자이크·블러·가리기를 적용해 주세요.");
+      showStatus("noEffects");
       return false;
     }
     return true;
@@ -339,10 +327,10 @@ export function Editor() {
     }
     try {
       addBrushStroke(active.stroke, tool, intensity);
-      showStatus(appliedMessage(tool));
+      showStatus(tool);
     } catch (error) {
       clearStrokePreview();
-      showStatus(toUserMessage(error), true);
+      showStatus(getErrorStatus(error), true);
     }
   }
 
@@ -412,39 +400,39 @@ export function Editor() {
 
   function applySelection() {
     if (!selection || selection.width < MIN_SELECTION || selection.height < MIN_SELECTION) {
-      showStatus("먼저 이미지에서 영역을 드래그해 주세요.");
+      showStatus("needSelection");
       return;
     }
     if (!canUseTool()) return;
     try {
       addRegion(selection, tool, intensity);
       setSelection(null);
-      showStatus(appliedMessage(tool));
+      showStatus(tool);
     } catch (error) {
-      showStatus(toUserMessage(error), true);
+      showStatus(getErrorStatus(error), true);
     }
   }
 
   function handleReset() {
     reset();
     setSelection(null);
-    showStatus("원본 이미지로 초기화했어요.");
+    showStatus("reset");
   }
 
   function handleRemoveImage() {
-    if (hasEffects && !window.confirm("적용한 편집이 모두 사라져요. 현재 이미지를 제거할까요?")) return;
+    if (hasEffects && !window.confirm(copy.confirmRemove)) return;
     strokeRef.current = null;
     clearStrokePreview();
     hideCursor();
     setSelection(null);
     setIsDrawing(false);
     clearImage();
-    showStatus("이미지를 제거했어요. 새 이미지를 추가하세요.");
+    showStatus("removed");
   }
 
   async function handleDownload() {
     if (!image) {
-      showStatus("먼저 이미지를 추가해 주세요.");
+      showStatus("needImage");
       return;
     }
     try {
@@ -459,24 +447,24 @@ export function Editor() {
       link.remove();
       // 다운로드가 시작될 시간을 준 뒤 객체 URL을 해제한다.
       window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
-      showStatus("편집한 이미지를 다운로드했어요.");
+      showStatus("downloaded");
     } catch (error) {
-      showStatus(toUserMessage(error), true);
+      showStatus(getErrorStatus(error), true);
     }
   }
 
   async function handleCopy() {
-    const flash = (label: string) => {
-      setCopyLabel(label);
-      window.setTimeout(() => setCopyLabel(COPY_LABEL), 2200);
+    const flash = (state: CopyState) => {
+      setCopyState(state);
+      window.setTimeout(() => setCopyState("ready"), 2200);
     };
     if (!image) {
-      showStatus("먼저 이미지를 추가해 주세요.");
+      showStatus("needImage");
       return;
     }
     if (!navigator.clipboard?.write || typeof ClipboardItem === "undefined") {
-      flash("지원 안 됨");
-      showStatus("이 브라우저에서는 이미지 복사를 지원하지 않아요. 다운로드를 이용해 주세요.", true);
+      flash("unsupported");
+      showStatus("copyUnsupported", true);
       return;
     }
     try {
@@ -486,11 +474,11 @@ export function Editor() {
         return result.blob;
       });
       await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-      flash("복사 완료");
-      showStatus("이미지를 클립보드에 복사했어요.");
+      flash("done");
+      showStatus("copied");
     } catch {
-      flash("복사 실패");
-      showStatus("브라우저의 클립보드 권한을 확인해 주세요.", true);
+      flash("failed");
+      showStatus("copyFailed", true);
     }
   }
 
@@ -499,27 +487,27 @@ export function Editor() {
   const usesIntensity = tool === "mosaic" || tool === "blur";
 
   return (
-    <section className="workspace-card" id="editor" aria-label="이미지 편집 영역">
+    <section className="workspace-card" id="editor" aria-label={copy.region}>
       <div className="workspace-topbar">
         <div className="workspace-title">
           <span className="status-dot" />
           <div>
-            <strong>{image?.fileName || "새 이미지 편집"}</strong>
+            <strong>{image?.fileName || copy.newImage}</strong>
             <small className={status.error ? "is-error" : undefined} role="status">
-              {status.text}
+              {copy.status[status.key]}
             </small>
           </div>
         </div>
         <div className="topbar-actions">
-          <button className="icon-button" type="button" aria-label="실행 취소" title="실행 취소 (Ctrl+Z)" onClick={handleUndo} disabled={!canUndo}>
+          <button className="icon-button" type="button" aria-label={copy.undo} title={`${copy.undo} (Ctrl+Z)`} onClick={handleUndo} disabled={!canUndo}>
             <Undo2 size={17} />
           </button>
-          <button className="icon-button" type="button" aria-label="다시 실행" title="다시 실행 (Ctrl+Shift+Z)" onClick={handleRedo} disabled={!canRedo}>
+          <button className="icon-button" type="button" aria-label={copy.redo} title={`${copy.redo} (Ctrl+Shift+Z)`} onClick={handleRedo} disabled={!canRedo}>
             <Redo2 size={17} />
           </button>
           <span className="topbar-divider" />
           <button className="reset-button" type="button" onClick={handleReset} disabled={!hasEffects}>
-            <RotateCcw size={15} /> 초기화
+            <RotateCcw size={15} /> {copy.reset}
           </button>
         </div>
       </div>
@@ -528,12 +516,12 @@ export function Editor() {
         <div className="canvas-panel">
           <div className="canvas-toolbar">
             <div className="canvas-meta">
-              <span className="live-dot" /> {image ? `${image.width} × ${image.height}px` : "미리보기"}{" "}
-              <span className="meta-divider">/</span> 원본 해상도 유지
+              <span className="live-dot" /> {image ? `${image.width} × ${image.height}px` : copy.preview}{" "}
+              <span className="meta-divider">/</span> {copy.originalResolution}
             </div>
             {image && (
               <button className="remove-image-button" type="button" onClick={handleRemoveImage}>
-                <X size={13} /> 이미지 제거
+                <X size={13} /> {copy.removeImage}
               </button>
             )}
           </div>
@@ -553,7 +541,7 @@ export function Editor() {
               <div className={`canvas-stage ${isBrush ? "is-brush" : ""}`}>
                 <canvas
                   ref={canvasRef}
-                  aria-label={`편집 중인 이미지: ${image.fileName}`}
+                  aria-label={`${copy.editingImage}: ${image.fileName}`}
                   onPointerDown={handlePointerDown}
                   onPointerMove={handlePointerMove}
                   onPointerUp={handlePointerUp}
@@ -573,7 +561,7 @@ export function Editor() {
                 <div ref={cursorRef} className="brush-cursor" aria-hidden="true" />
                 {selection && (
                   <div className="selection-box" style={getSelectionStyle(selection, image.width, image.height)}>
-                    <span>영역 선택됨</span>
+                    <span>{copy.selected}</span>
                   </div>
                 )}
               </div>
@@ -582,13 +570,13 @@ export function Editor() {
                 <div className="upload-icon-wrap">
                   <CloudUpload size={30} strokeWidth={1.6} />
                 </div>
-                <h2>이미지를 여기에 놓으세요</h2>
-                <p>또는 파일을 선택해서 업로드하세요</p>
+                <h2>{copy.drop}</h2>
+                <p>{copy.chooseHint}</p>
                 <button className="upload-button" type="button" onClick={() => fileInputRef.current?.click()}>
-                  <ImageIcon size={17} /> 이미지 선택 <span>{shortcutLabel}</span>
+                  <ImageIcon size={17} /> {copy.choose} <span>{shortcutLabel}</span>
                 </button>
                 <div className="upload-hint">
-                  <MousePointer2 size={14} /> 드래그 앤 드롭 또는 Ctrl + V 붙여넣기
+                  <MousePointer2 size={14} /> {copy.paste}
                 </div>
               </div>
             )}
@@ -603,12 +591,12 @@ export function Editor() {
           <div className="tools-heading">
             <div>
               <span>EDIT TOOLS</span>
-              <h2>편집 도구</h2>
+              <h2>{copy.toolsHeading}</h2>
             </div>
             <button
               type="button"
               className={`help-button ${showHelp ? "is-open" : ""}`}
-              aria-label="편집 도구 사용법"
+              aria-label={copy.helpLabel}
               aria-expanded={showHelp}
               aria-controls="editor-help"
               onClick={() => setShowHelp((open) => !open)}
@@ -618,14 +606,14 @@ export function Editor() {
           </div>
           {showHelp && (
             <div className="help-box" id="editor-help">
-              <p><strong>브러시</strong> 누른 채로 칠하면 손을 뗄 때 바로 적용돼요.</p>
-              <p><strong>사각형</strong> 드래그한 뒤 &apos;선택 영역 적용&apos;을 누르세요.</p>
-              <p><strong>지우개</strong> 효과를 준 곳을 칠하면 원래대로 돌아가요.</p>
-              <p><strong>단축키</strong> Ctrl+Z 실행 취소 · Ctrl+Shift+Z 다시 실행</p>
+              <p><strong>{copy.brush}</strong> {copy.help.brush}</p>
+              <p><strong>{copy.rect}</strong> {copy.help.rect}</p>
+              <p><strong>{copy.tools.erase}</strong> {copy.help.erase}</p>
+              <p><strong>{copy.shortcuts}</strong> {copy.help.shortcuts}</p>
             </div>
           )}
-          <div className="tool-list" role="radiogroup" aria-label="편집 도구">
-            {TOOLS.map(({ label, key, icon: Icon }) => (
+          <div className="tool-list" role="radiogroup" aria-label={copy.toolsHeading}>
+            {TOOLS.map(({ key, icon: Icon }) => (
               <button
                 className={`tool-button ${tool === key ? "is-active" : ""}`}
                 type="button"
@@ -637,15 +625,15 @@ export function Editor() {
                 <span className="tool-icon">
                   <Icon size={16} />
                 </span>
-                <span>{label}</span>
+                <span>{copy.tools[key]}</span>
               </button>
             ))}
           </div>
           <div className="mode-block">
             <div className="settings-label">
-              <span>영역 지정</span>
+              <span>{copy.selection}</span>
             </div>
-            <div className="mode-switch" role="radiogroup" aria-label="영역 지정 방식">
+            <div className="mode-switch" role="radiogroup" aria-label={copy.mode}>
               <button
                 className={`mode-button ${isBrush ? "is-active" : ""}`}
                 type="button"
@@ -653,7 +641,7 @@ export function Editor() {
                 aria-checked={isBrush}
                 onClick={() => changeSelectMode("brush")}
               >
-                <Brush size={14} /> 브러시
+                <Brush size={14} /> {copy.brush}
               </button>
               <button
                 className={`mode-button ${!isBrush ? "is-active" : ""}`}
@@ -662,15 +650,15 @@ export function Editor() {
                 aria-checked={!isBrush}
                 onClick={() => changeSelectMode("rect")}
               >
-                <SquareDashed size={14} /> 사각형
+                <SquareDashed size={14} /> {copy.rect}
               </button>
             </div>
           </div>
           <div className="settings-block">
             <div className="range-group">
               <div className="settings-label">
-                <span>강도</span>
-                <strong>{tool === "redact" ? "완전 가림" : isErase ? "원본 복원" : `${intensity}%`}</strong>
+                <span>{copy.strength}</span>
+                <strong>{tool === "redact" ? copy.opaque : isErase ? copy.restore : `${intensity}%`}</strong>
               </div>
               <input
                 className="intensity-range"
@@ -680,13 +668,13 @@ export function Editor() {
                 value={intensity}
                 disabled={!usesIntensity}
                 onChange={(event) => setIntensity(Number(event.target.value))}
-                aria-label="효과 강도"
+                aria-label={copy.effectStrength}
               />
             </div>
             {isBrush && (
               <div className="range-group">
                 <div className="settings-label">
-                  <span>브러시 크기</span>
+                  <span>{copy.brushSize}</span>
                   <strong>{brushSize}px</strong>
                 </div>
                 <input
@@ -696,26 +684,26 @@ export function Editor() {
                   max={BRUSH_MAX}
                   value={brushSize}
                   onChange={(event) => setBrushSize(Number(event.target.value))}
-                  aria-label="브러시 크기"
+                  aria-label={copy.brushSize}
                 />
               </div>
             )}
           </div>
           <div className="selection-note">
             <Info size={15} />
-            <span>{guideText(selectMode, tool, selection !== null)}</span>
+            <span>{copy.guide[getGuideKey(selectMode, tool, selection !== null)]}</span>
           </div>
           {!isBrush && (
             <button className="apply-button" type="button" onClick={applySelection} disabled={!selection}>
-              <Sparkles size={16} /> {isErase ? "선택 영역 지우기" : "선택 영역 적용"}
+              <Sparkles size={16} /> {isErase ? copy.eraseSelection : copy.apply}
             </button>
           )}
           <div className="output-actions">
             <button className="download-button" type="button" onClick={() => void handleDownload()}>
-              <ArrowDownToLine size={17} /> 다운로드
+              <ArrowDownToLine size={17} /> {copy.download}
             </button>
             <button className="copy-button" type="button" onClick={() => void handleCopy()}>
-              <Copy size={15} /> {copyLabel}
+              <Copy size={15} /> {copy.copy[copyState]}
             </button>
           </div>
         </aside>

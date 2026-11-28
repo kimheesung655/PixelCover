@@ -1,24 +1,169 @@
-import { ImageEditError } from "../../lib/editor";
+import type { Language } from "../copy";
+import type { Tool } from "../../hooks/useImageEditor";
+import { ImageEditError, type ImageEditErrorCode } from "../../lib/editor";
 
-/** 엔진 오류 코드를 사용자에게 보여줄 문장으로 바꾼다. */
-export function toUserMessage(error: unknown): string {
-  if (error instanceof ImageEditError) {
-    switch (error.code) {
-      case "UNSUPPORTED_FORMAT":
-        return "JPG, PNG, WebP 이미지만 열 수 있어요.";
-      case "FILE_TOO_LARGE":
-        return "20MB 이하 이미지만 열 수 있어요.";
-      case "IMAGE_TOO_LARGE":
-        return "이미지가 너무 커요. 한 변 8,192px, 총 1,600만 픽셀 이하만 열 수 있어요.";
-      case "DECODE_FAILED":
-        return "이미지를 열 수 없어요. 파일이 손상되지 않았는지 확인해 주세요.";
-      case "INVALID_REGION":
-        return "선택 영역이 올바르지 않아요. 다시 드래그해 주세요.";
-      case "RENDER_FAILED":
-        return "이미지를 그리는 중 문제가 생겼어요. 다시 시도해 주세요.";
-      case "EXPORT_FAILED":
-        return "이미지를 저장하지 못했어요. 다시 시도해 주세요.";
-    }
-  }
-  return "알 수 없는 문제가 생겼어요. 다시 시도해 주세요.";
+const ko = {
+  region: "이미지 편집 영역",
+  newImage: "새 이미지 편집",
+  undo: "실행 취소",
+  redo: "다시 실행",
+  reset: "초기화",
+  preview: "미리보기",
+  originalResolution: "원본 해상도 유지",
+  removeImage: "이미지 제거",
+  editingImage: "편집 중인 이미지",
+  selected: "영역 선택됨",
+  drop: "이미지를 여기에 놓으세요",
+  chooseHint: "또는 파일을 선택해 주세요",
+  choose: "이미지 선택",
+  paste: "드래그 앤 드롭 또는 Ctrl + V 붙여넣기",
+  toolsHeading: "편집 도구",
+  helpLabel: "편집 도구 사용법",
+  tools: { mosaic: "모자이크", blur: "블러", redact: "가리기", erase: "지우개" } satisfies Record<Tool, string>,
+  brush: "브러시",
+  rect: "사각형",
+  shortcuts: "단축키",
+  help: {
+    brush: "누른 채로 칠하면 손을 뗄 때 바로 적용돼요.",
+    rect: "드래그한 뒤 '선택 영역 적용'을 누르세요.",
+    erase: "효과를 준 곳을 칠하면 원래대로 돌아가요.",
+    shortcuts: "Ctrl+Z 실행 취소 · Ctrl+Shift+Z 다시 실행",
+  },
+  selection: "영역 지정",
+  mode: "영역 지정 방식",
+  strength: "강도",
+  effectStrength: "효과 강도",
+  opaque: "완전 가림",
+  restore: "원본 복원",
+  brushSize: "브러시 크기",
+  guide: {
+    brush: "가릴 부분을 칠하면 손을 뗄 때 바로 적용돼요.",
+    eraseBrush: "효과를 준 곳을 칠하면 그 부분만 원래 이미지로 돌아가요.",
+    rect: "가리고 싶은 영역을 드래그해 주세요.",
+    eraseRect: "원래대로 되돌릴 영역을 드래그해 주세요.",
+    apply: "선택한 영역에 효과를 적용하려면 아래 버튼을 눌러주세요.",
+    applyErase: "선택한 영역을 원래대로 되돌리려면 아래 버튼을 눌러주세요.",
+  },
+  apply: "선택 영역 적용",
+  eraseSelection: "선택 영역 지우기",
+  download: "다운로드",
+  copy: { ready: "복사", unsupported: "지원 안 됨", done: "복사 완료", failed: "복사 실패" },
+  confirmRemove: "적용한 편집이 모두 사라져요. 현재 이미지를 제거할까요?",
+  status: {
+    ready: "작업을 시작하려면 이미지를 추가하세요",
+    loading: "이미지를 여는 중이에요…",
+    brushReady: "가릴 부분을 마우스로 칠해 보세요",
+    rectReady: "영역을 드래그해 편집을 시작하세요",
+    undone: "이전 작업으로 되돌렸어요.",
+    redone: "작업을 다시 적용했어요.",
+    noEffects: "아직 지울 효과가 없어요. 먼저 모자이크·블러·가리기를 적용해 주세요.",
+    mosaic: "모자이크 처리가 적용됐어요.",
+    blur: "블러 처리가 적용됐어요.",
+    redact: "가리기 처리가 적용됐어요.",
+    erase: "지운 부분을 원래 이미지로 되돌렸어요.",
+    needSelection: "먼저 이미지에서 영역을 드래그해 주세요.",
+    reset: "원본 이미지로 초기화했어요.",
+    removed: "이미지를 제거했어요. 새 이미지를 추가하세요.",
+    needImage: "먼저 이미지를 추가해 주세요.",
+    downloaded: "편집한 이미지를 다운로드했어요.",
+    copyUnsupported: "이 브라우저에서는 이미지 복사를 지원하지 않아요. 다운로드를 이용해 주세요.",
+    copied: "이미지를 클립보드에 복사했어요.",
+    copyFailed: "브라우저의 클립보드 권한을 확인해 주세요.",
+    UNSUPPORTED_FORMAT: "JPG, PNG, WebP 이미지만 열 수 있어요.",
+    FILE_TOO_LARGE: "20MB 이하 이미지만 열 수 있어요.",
+    IMAGE_TOO_LARGE: "이미지가 너무 커요. 한 변 8,192px, 총 1,600만 픽셀 이하만 열 수 있어요.",
+    DECODE_FAILED: "이미지를 열 수 없어요. 파일이 손상되지 않았는지 확인해 주세요.",
+    INVALID_REGION: "선택 영역이 올바르지 않아요. 다시 드래그해 주세요.",
+    RENDER_FAILED: "이미지를 그리는 중 문제가 생겼어요. 다시 시도해 주세요.",
+    EXPORT_FAILED: "이미지를 저장하지 못했어요. 다시 시도해 주세요.",
+    unknown: "알 수 없는 문제가 생겼어요. 다시 시도해 주세요.",
+  },
+};
+
+export type EditorStatus = keyof typeof ko.status;
+export type CopyState = keyof typeof ko.copy;
+
+export const editorCopy: Record<Language, typeof ko> = {
+  ko,
+  en: {
+    region: "Image editor",
+    newImage: "New image",
+    undo: "Undo",
+    redo: "Redo",
+    reset: "Reset",
+    preview: "Preview",
+    originalResolution: "Original resolution",
+    removeImage: "Remove image",
+    editingImage: "Editing image",
+    selected: "Area selected",
+    drop: "Drop your image here",
+    chooseHint: "Or choose a file from your device",
+    choose: "Choose image",
+    paste: "Drag and drop or paste with Ctrl + V",
+    toolsHeading: "Editing tools",
+    helpLabel: "How to use the editing tools",
+    tools: { mosaic: "Mosaic", blur: "Blur", redact: "Cover", erase: "Eraser" },
+    brush: "Brush",
+    rect: "Rectangle",
+    shortcuts: "Shortcuts",
+    help: {
+      brush: "Paint over an area. The effect is applied when you release.",
+      rect: "Drag to select an area, then choose Apply effect.",
+      erase: "Paint over an edit to restore the original image in that area.",
+      shortcuts: "Ctrl+Z to undo · Ctrl+Shift+Z to redo",
+    },
+    selection: "Selection",
+    mode: "Selection mode",
+    strength: "Strength",
+    effectStrength: "Effect strength",
+    opaque: "Opaque cover",
+    restore: "Restore original",
+    brushSize: "Brush size",
+    guide: {
+      brush: "Paint over an area and release to apply the effect.",
+      eraseBrush: "Paint over an edit to restore the original in that area.",
+      rect: "Drag to select the area you want to cover.",
+      eraseRect: "Drag to select the area you want to restore.",
+      apply: "Choose Apply effect to edit the selected area.",
+      applyErase: "Choose Erase edits to restore the selected area.",
+    },
+    apply: "Apply effect",
+    eraseSelection: "Erase edits",
+    download: "Download",
+    copy: { ready: "Copy", unsupported: "Unavailable", done: "Copied", failed: "Copy failed" },
+    confirmRemove: "Removing this image will discard your edits. Remove it?",
+    status: {
+      ready: "Add an image to get started",
+      loading: "Opening image…",
+      brushReady: "Paint over the area you want to cover",
+      rectReady: "Drag to select an area to edit",
+      undone: "Edit undone.",
+      redone: "Edit reapplied.",
+      noEffects: "There are no edits to erase yet. Apply Mosaic, Blur, or Cover first.",
+      mosaic: "Mosaic applied.",
+      blur: "Blur applied.",
+      redact: "Cover applied.",
+      erase: "Original image restored in the erased area.",
+      needSelection: "Drag on the image to select an area first.",
+      reset: "Restored the original image.",
+      removed: "Image removed. Add a new image to continue.",
+      needImage: "Add an image first.",
+      downloaded: "Edited image downloaded.",
+      copyUnsupported: "This browser cannot copy images. Use Download instead.",
+      copied: "Image copied to the clipboard.",
+      copyFailed: "Check your browser’s clipboard permissions.",
+      UNSUPPORTED_FORMAT: "Only JPG, PNG, and WebP images are supported.",
+      FILE_TOO_LARGE: "Choose an image no larger than 20 MB.",
+      IMAGE_TOO_LARGE: "Choose an image up to 8,192 px on each side and 16 million pixels in total.",
+      DECODE_FAILED: "Could not open this image. Check whether the file is damaged.",
+      INVALID_REGION: "The selection is invalid. Try dragging again.",
+      RENDER_FAILED: "Could not display the edited image. Try again.",
+      EXPORT_FAILED: "Could not save the image. Try again.",
+      unknown: "Something went wrong. Try again.",
+    },
+  },
+};
+
+export function getErrorStatus(error: unknown): ImageEditErrorCode | "unknown" {
+  return error instanceof ImageEditError ? error.code : "unknown";
 }

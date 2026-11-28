@@ -1,26 +1,28 @@
 import { FileImage, ShieldCheck, Sparkles } from "lucide-react";
 
-export function HeroSection() {
+import type { SiteCopy } from "../copy";
+
+export function HeroSection({ copy }: { copy: SiteCopy }) {
   return (
     <section className="hero-section">
       <div className="eyebrow">
         <span className="eyebrow-dot" /> QUICK PRIVACY EDITOR
       </div>
       <h1>
-        사진 속 민감한 부분을
+        {copy.heroTitle[0]}
         <br />
-        <span>깔끔하게 가려보세요.</span>
+        <span>{copy.heroTitle[1]}</span>
       </h1>
       <p className="hero-copy">
-        설치 없이 바로 시작하는 이미지 개인정보 보호 도구.
-        <br className="mobile-break" /> 업로드부터 다운로드까지, 모든 작업은 내 브라우저 안에서 처리됩니다.
+        {copy.heroDescription[0]}
+        <br className="mobile-break" /> {copy.heroDescription[1]}
       </p>
       <div className="hero-stats">
         <span>
-          <ShieldCheck size={15} /> 서버 전송 없음
+          <ShieldCheck size={15} /> {copy.noUpload}
         </span>
         <span>
-          <Sparkles size={15} /> 회원가입 없음
+          <Sparkles size={15} /> {copy.noAccount}
         </span>
         <span>
           <FileImage size={15} /> JPG · PNG · WebP
