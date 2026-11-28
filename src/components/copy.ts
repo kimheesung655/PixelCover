@@ -1,6 +1,6 @@
 export const siteCopy = {
   ko: {
-    title: "PixelCover | 이미지 개인정보 보호 도구",
+    title: "사진 모자이크·블러·가리기 | PixelCover",
     home: "PixelCover 홈",
     navigation: "주요 메뉴",
     tools: "편집 도구",
