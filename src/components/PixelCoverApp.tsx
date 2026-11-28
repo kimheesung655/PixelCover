@@ -26,7 +26,7 @@ export function PixelCoverApp() {
           <Editor />
           <HowItWorks />
           <TrustBanner />
-          <FaqSection isLightTheme={isLightTheme} onToggleTheme={toggleTheme} />
+          <FaqSection />
         </main>
         <SiteFooter />
       </div>

@@ -37,7 +37,7 @@ a { color: inherit; text-decoration: none; }
 .brand-mark { width: 31px; height: 31px; border: 1px solid #425043; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; color: #a9f15e; background: #1a241c; box-shadow: 0 0 22px rgba(169, 241, 94, .08); }
 .desktop-nav { display: flex; gap: 31px; color: #7e8790; font-size: 12px; }
 .desktop-nav a { transition: color .2s ease; }
-.desktop-nav a:hover, .all-link:hover { color: #a9f15e; }
+.desktop-nav a:hover, .faq-toggle-all:hover { color: #a9f15e; }
 .header-navigation { display: flex; align-items: center; gap: 20px; }
 .theme-toggle { display: inline-flex; align-items: center; gap: 6px; border: 0; color: #7a8790; background: transparent; padding: 0; font: 500 9px var(--font-dm-mono), monospace; letter-spacing: .03em; transition: color .2s ease; }
 .theme-toggle:hover { color: #dce4e7; }
@@ -175,11 +175,8 @@ a { color: inherit; text-decoration: none; }
 .trust-banner strong { font-size: 12px; color: #c9e9aa; }
 .trust-banner p { margin: 5px 0 0; color: #718070; font-size: 10px; }
 .trust-shield { color: #adf067; opacity: .07; position: absolute; right: 29px; transform: rotate(14deg); }
-.all-link { color: #8f9a9f; font-size: 11px; transition: color .2s ease; }
-.all-link span { color: #a9f15e; margin-left: 4px; }
-.faq-heading-actions { display: flex; align-items: center; gap: 19px; }
-.section-theme-button { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #2d393e; border-radius: 999px; padding: 7px 10px; color: #8d999e; background: #13191d; font-size: 10px; transition: all .2s ease; }
-.section-theme-button:hover { border-color: #a9f15e; color: #a9f15e; }
+.faq-toggle-all { flex-shrink: 0; padding: 6px 0; border: 0; background: transparent; color: #8f9a9f; font-size: 11px; transition: color .2s ease; }
+.faq-toggle-all span { color: #a9f15e; margin-left: 4px; }
 .faq-list { border-top: 1px solid #293139; }
 .faq-entry { border-bottom: 1px solid #293139; }
 .faq-item { width: 100%; padding: 20px 2px; display: flex; align-items: center; justify-content: space-between; border: 0; background: transparent; color: #b2bbc1; font-size: 12px; text-align: left; transition: color .2s ease, padding .2s ease; }
@@ -267,8 +264,8 @@ a { color: inherit; text-decoration: none; }
 .theme-light .faq-item { color: #526067; }
 .theme-light .faq-item:hover { color: #4d8a2d; }
 .theme-light .faq-answer { color: #66747a; }
-.theme-light .section-theme-button { border-color: #cbdad5; color: #617076; background: #f8fbfa; }
-.theme-light .section-theme-button:hover { border-color: #75a45d; color: #4d8a2d; }
+.theme-light .faq-toggle-all { color: #526067; }
+.theme-light .faq-toggle-all:hover, .theme-light .faq-toggle-all span { color: #4d8a2d; }
 .theme-light .site-footer { color: #748187; }
 .theme-light .footer-copyright { color: #8b979b; }
 .theme-light .ad-rail { border-color: #dce5e2; background: rgba(250, 252, 251, .7); color: #82908d; }

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { Moon, Sun } from "lucide-react";
 
 const FAQS = [
   {
@@ -18,13 +17,15 @@ const FAQS = [
   },
 ];
 
-type Props = {
-  isLightTheme: boolean;
-  onToggleTheme: () => void;
-};
+export function FaqSection() {
+  const [openIndices, setOpenIndices] = useState<number[]>([]);
+  const allOpen = openIndices.length === FAQS.length;
 
-export function FaqSection({ isLightTheme, onToggleTheme }: Props) {
-  const [openIndex, setOpenIndex] = useState<number | null>(null);
+  function toggleQuestion(index: number) {
+    setOpenIndices((current) =>
+      current.includes(index) ? current.filter((item) => item !== index) : [...current, index],
+    );
+  }
 
   return (
     <section className="faq-section" id="faq">
@@ -33,18 +34,19 @@ export function FaqSection({ isLightTheme, onToggleTheme }: Props) {
           <span className="section-kicker">NEED TO KNOW</span>
           <h2>자주 묻는 질문</h2>
         </div>
-        <div className="faq-heading-actions">
-          <button className="section-theme-button" type="button" onClick={onToggleTheme}>
-            {isLightTheme ? <Moon size={14} /> : <Sun size={14} />} {isLightTheme ? "Black 테마" : "White 테마"}
-          </button>
-          <a href="#faq" className="all-link">
-            전체 보기 <span>↗</span>
-          </a>
-        </div>
+        <button
+          className="faq-toggle-all"
+          type="button"
+          aria-controls="faq-answers"
+          aria-expanded={allOpen}
+          onClick={() => setOpenIndices(allOpen ? [] : FAQS.map((_, index) => index))}
+        >
+          {allOpen ? "전체 접기" : "전체 보기"} <span aria-hidden="true">{allOpen ? "▴" : "▾"}</span>
+        </button>
       </div>
-      <div className="faq-list">
+      <div className="faq-list" id="faq-answers">
         {FAQS.map((faq, index) => {
-          const open = openIndex === index;
+          const open = openIndices.includes(index);
           return (
             <div className="faq-entry" key={faq.q}>
               <button
@@ -52,7 +54,7 @@ export function FaqSection({ isLightTheme, onToggleTheme }: Props) {
                 type="button"
                 aria-expanded={open}
                 aria-controls={`faq-answer-${index}`}
-                onClick={() => setOpenIndex(open ? null : index)}
+                onClick={() => toggleQuestion(index)}
               >
                 <span>{faq.q}</span>
                 <span className="faq-plus" aria-hidden="true">
