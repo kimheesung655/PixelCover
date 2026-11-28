@@ -9,6 +9,7 @@ export const siteCopy = {
     switchTheme: { light: "White 테마로 전환", dark: "Black 테마로 전환" },
     privacy: "브라우저에서 안전하게 처리",
     menu: "메뉴 열기",
+    closeMenu: "메뉴 닫기",
     ad: { left: "왼쪽 광고 영역", right: "오른쪽 광고 영역" },
     heroTitle: ["사진 속 민감한 부분을", "깔끔하게 가려보세요."],
     heroDescription: [
@@ -53,6 +54,7 @@ export const siteCopy = {
     switchTheme: { light: "Switch to light theme", dark: "Switch to dark theme" },
     privacy: "Processed in your browser",
     menu: "Open menu",
+    closeMenu: "Close menu",
     ad: { left: "Left ad space", right: "Right ad space" },
     heroTitle: ["Hide sensitive details", "in your photos."],
     heroDescription: [

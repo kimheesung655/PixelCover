@@ -1,4 +1,5 @@
-import { LockKeyhole, Menu, Moon, ShieldCheck, Sun } from "lucide-react";
+import { useRef, useState } from "react";
+import { LockKeyhole, Menu, Moon, ShieldCheck, Sun, X } from "lucide-react";
 import type { Language, SiteCopy } from "../copy";
 
 type Props = {
@@ -10,8 +11,24 @@ type Props = {
 };
 
 export function SiteHeader({ copy, language, onToggleLanguage, isLightTheme, onToggleTheme }: Props) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuButton = useRef<HTMLButtonElement>(null);
+  const links = [
+    { href: "#editor", label: copy.tools },
+    { href: "#how-to", label: copy.howTo },
+    { href: "#faq", label: copy.faq },
+  ];
+
   return (
-    <header className="site-header">
+    <header
+      className="site-header"
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && menuOpen) {
+          setMenuOpen(false);
+          menuButton.current?.focus();
+        }
+      }}
+    >
       <a className="brand" href="#top" aria-label={copy.home}>
         <span className="brand-mark">
           <ShieldCheck size={18} strokeWidth={2.5} />
@@ -22,9 +39,7 @@ export function SiteHeader({ copy, language, onToggleLanguage, isLightTheme, onT
       </a>
       <div className="header-navigation">
         <nav className="desktop-nav" aria-label={copy.navigation}>
-          <a href="#editor">{copy.tools}</a>
-          <a href="#how-to">{copy.howTo}</a>
-          <a href="#faq">{copy.faq}</a>
+          {links.map(({ href, label }) => <a key={href} href={href}>{label}</a>)}
         </nav>
         <button
           className={`theme-toggle ${isLightTheme ? "is-light" : ""}`}
@@ -52,11 +67,23 @@ export function SiteHeader({ copy, language, onToggleLanguage, isLightTheme, onT
         <span className="privacy-chip">
           <LockKeyhole size={13} /> {copy.privacy}
         </span>
-        {/* TODO: 모바일 메뉴 열기 동작 미구현 */}
-        <button className="menu-button" type="button" aria-label={copy.menu}>
-          <Menu size={20} />
+        <button
+          ref={menuButton}
+          className="menu-button"
+          type="button"
+          aria-label={menuOpen ? copy.closeMenu : copy.menu}
+          aria-expanded={menuOpen}
+          aria-controls="mobile-navigation"
+          onClick={() => setMenuOpen((open) => !open)}
+        >
+          {menuOpen ? <X size={20} /> : <Menu size={20} />}
         </button>
       </div>
+      <nav className="mobile-nav" id="mobile-navigation" aria-label={copy.navigation} hidden={!menuOpen}>
+        {links.map(({ href, label }) => (
+          <a key={href} href={href} onClick={() => setMenuOpen(false)}>{label}</a>
+        ))}
+      </nav>
     </header>
   );
 }

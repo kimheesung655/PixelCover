@@ -50,6 +50,7 @@ a { color: inherit; text-decoration: none; }
 .header-actions { display: flex; align-items: center; gap: 15px; }
 .privacy-chip { color: #818b94; border: 1px solid #252c33; background: #11151a; padding: 9px 11px; border-radius: 999px; display: inline-flex; gap: 6px; align-items: center; font-size: 10px; }
 .privacy-chip svg { color: #9bd95d; }
+.mobile-nav { display: none; }
 .menu-button { display: none; color: #d7dce0; border: 0; background: transparent; padding: 7px; }
 
 .hero-section { padding: 77px 0 58px; text-align: center; }
@@ -281,7 +282,13 @@ a { color: inherit; text-decoration: none; }
 }
 @media (max-width: 760px) {
   .page-wrap { padding: 0 16px; }
-  .site-header { height: 70px; }
+  .site-header { height: 70px; position: relative; z-index: 6; }
+  .mobile-nav:not([hidden]) { display: grid; gap: 2px; position: absolute; top: 100%; right: 0; min-width: 172px; padding: 7px; border: 1px solid #303a43; border-radius: 8px; background: #171c23; }
+  .mobile-nav a { padding: 9px 10px; font-size: 12px; border-radius: 5px; }
+  .mobile-nav a:hover, .mobile-nav a:focus-visible { background: #303a43; }
+  .theme-light .mobile-nav { background: #f8faf9; border-color: #cbd7d5; }
+  .theme-light .mobile-nav a:hover, .theme-light .mobile-nav a:focus-visible { background: #e7efeb; }
+  .theme-light .menu-button { color: #526067; }
   .desktop-nav, .privacy-chip { display: none; }
   .header-navigation { gap: 10px; margin-left: auto; margin-right: 10px; }
   .menu-button { display: inline-flex; }
